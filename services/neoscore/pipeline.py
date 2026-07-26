@@ -272,8 +272,8 @@ class SolvencyModel:
 
     def score(self, features: dict[str, Any]) -> dict[str, Any]:
         if self.pipeline is None and not self.load():
-            # Auto-bootstrap
-            self.train(samples=None, n_synthetic=400)
+            # Auto-bootstrap léger (Render free / cold start)
+            self.train(samples=None, n_synthetic=120)
 
         assert self.pipeline is not None
         vec = features_to_vector(features).reshape(1, -1)

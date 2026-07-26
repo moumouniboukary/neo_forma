@@ -1,0 +1,1749 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeoForma — Design System & App Complet (Figma Board)</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #07140F;
+  --canvas: #0A1A13;
+  --surface: #0F3D2E;
+  --card: #1A4D38;
+  --card2: #0F2D22;
+  --elevated: #245C46;
+  --green: #1D9E75;
+  --green-lt: #5DCAA5;
+  --green-xs: #9FE1CB;
+  --text: #E1F5EE;
+  --dim: #5DCAA5;
+  --muted: #7AB89A;
+  --border: #1D4D38;
+  --amber: #EF9F27;
+  --coral: #D85A30;
+  --danger: #E24B4A;
+  --ok: #3DBF8C;
+  --phone-w: 260px;
+  --phone-h: 520px;
+  --r: 28px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(29,158,117,.12), transparent),
+    radial-gradient(ellipse 60% 40% at 90% 10%, rgba(15,61,46,.5), transparent),
+    var(--bg);
+  font-family: 'DM Sans', sans-serif;
+  color: var(--text);
+  min-height: 100vh;
+  padding: 48px 32px 80px;
+}
+.board-header { max-width: 1400px; margin: 0 auto 56px; }
+.board-header .eyebrow {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 12px;
+}
+.board-header h1 {
+  font-family: 'Space Mono', monospace;
+  font-size: clamp(28px, 4vw, 42px);
+  font-weight: 700;
+  color: var(--green-xs);
+  letter-spacing: -1px;
+  line-height: 1.15;
+}
+.board-header .lead {
+  margin-top: 12px;
+  max-width: 640px;
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--dim);
+}
+.meta-row {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px;
+}
+.chip {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(26,77,56,.5);
+  color: var(--green-lt);
+}
+
+/* Sections */
+.section {
+  max-width: 1400px;
+  margin: 0 auto 64px;
+}
+.section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  margin-bottom: 28px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(29,77,56,.6);
+}
+.section-num {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px;
+  color: var(--green);
+}
+.section-head h2 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+.section-head p {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 360px;
+  text-align: right;
+}
+
+.flow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 28px 22px;
+  align-items: flex-start;
+}
+.frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  animation: fadeUp .5s ease both;
+}
+.frame-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--dim);
+  text-align: center;
+  max-width: var(--phone-w);
+}
+.frame-id {
+  color: var(--green);
+  margin-right: 4px;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Phone */
+.phone {
+  width: var(--phone-w);
+  height: var(--phone-h);
+  background: var(--surface);
+  border-radius: var(--r);
+  border: 2px solid var(--border);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  box-shadow:
+    0 28px 64px rgba(0,0,0,.45),
+    inset 0 1px 0 rgba(255,255,255,.06);
+}
+.notch {
+  width: 38%; height: 10px;
+  background: #050D09;
+  border-radius: 0 0 10px 10px;
+  margin: 0 auto;
+  flex-shrink: 0;
+  z-index: 3;
+}
+.status {
+  position: absolute;
+  top: 12px; left: 14px; right: 14px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--green-xs);
+  z-index: 4;
+  pointer-events: none;
+}
+.status .icons { display: flex; gap: 4px; align-items: center; opacity: .85; }
+
+.s-hdr {
+  background: var(--card2);
+  padding: 18px 14px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.s-hdr-title { font-size: 13px; font-weight: 600; color: var(--green-xs); flex: 1; }
+.s-body {
+  flex: 1;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+}
+.s-body.scroll { overflow-y: auto; }
+.s-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.03);
+}
+.lbl {
+  font-size: 8px;
+  color: var(--dim);
+  font-weight: 500;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.btn {
+  border-radius: 10px;
+  padding: 11px 14px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+  flex-shrink: 0;
+  border: none;
+}
+.btn-p { background: var(--green); color: var(--text); }
+.btn-o {
+  background: transparent;
+  border: 1.5px solid var(--green);
+  color: var(--green-lt);
+}
+.btn-g { background: var(--elevated); color: var(--green-xs); }
+.btn-amber { background: var(--amber); color: #1A1205; }
+.btn-row { display: flex; gap: 8px; }
+.btn-row .btn { flex: 1; }
+.back {
+  width: 22px; height: 22px;
+  border-radius: 6px;
+  background: rgba(29,158,117,.12);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.back svg { width: 12px; height: 12px; }
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 8px;
+  font-weight: 600;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--green);
+  background: rgba(29,158,117,.15);
+  color: var(--green-lt);
+}
+.avatar {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: var(--green);
+  display: grid; place-items: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--text);
+}
+.input {
+  background: var(--card2);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--dim);
+}
+.input.focus {
+  border-color: var(--green);
+  color: var(--green-xs);
+}
+.input .cursor {
+  width: 1.5px; height: 12px;
+  background: var(--green);
+  animation: blink 1s step-end infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+.bottom-nav {
+  background: var(--card2);
+  border-top: 1px solid var(--border);
+  display: flex;
+  padding: 8px 6px 12px;
+  flex-shrink: 0;
+}
+.nav-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  font-size: 7px;
+  color: var(--dim);
+}
+.nav-item.on { color: var(--green); }
+.nav-item svg { width: 16px; height: 16px; }
+.nav-dot {
+  width: 3px; height: 3px;
+  border-radius: 50%;
+  background: var(--green);
+}
+
+/* Design tokens panel */
+.tokens {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+.token-card {
+  background: rgba(15,61,46,.45);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 20px;
+}
+.token-card h3 {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--green);
+  margin-bottom: 16px;
+}
+.swatch-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.sw {
+  display: flex; flex-direction: column; gap: 4px;
+}
+.sw-box {
+  height: 44px;
+  border-radius: 8px;
+  border: 1px solid rgba(255,255,255,.08);
+}
+.sw span { font-family: 'Space Mono', monospace; font-size: 8px; color: var(--dim); }
+.type-sample { margin-bottom: 14px; }
+.type-sample .name {
+  font-family: 'Space Mono', monospace;
+  font-size: 9px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.type-sample .demo-lg {
+  font-family: 'Space Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--green-xs);
+}
+.type-sample .demo-md { font-size: 15px; font-weight: 600; }
+.type-sample .demo-sm { font-size: 12px; color: var(--dim); }
+.comp-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 12px; }
+.comp-row .btn { padding: 8px 12px; font-size: 11px; }
+
+/* Screen-specific */
+.splash {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(29,158,117,.25), transparent 55%),
+    var(--surface);
+  padding: 24px;
+  text-align: center;
+}
+.logo-lg {
+  width: 64px; height: 64px;
+  background: var(--green);
+  border-radius: 18px;
+  display: grid; place-items: center;
+  box-shadow: 0 12px 32px rgba(29,158,117,.35);
+}
+.logo-lg svg { width: 34px; height: 34px; }
+.brand {
+  font-family: 'Space Mono', monospace;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--green-xs);
+}
+.tagline { font-size: 11px; color: var(--dim); line-height: 1.45; }
+
+.lang-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.lang-card {
+  background: var(--card);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 10px;
+  text-align: center;
+}
+.lang-card.on {
+  border-color: var(--green);
+  background: rgba(29,158,117,.18);
+}
+.lang-card .code {
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--green-xs);
+}
+.lang-card .name { font-size: 9px; color: var(--dim); margin-top: 4px; }
+
+.steps {
+  display: flex; gap: 4px; margin-bottom: 4px;
+}
+.step-dot {
+  flex: 1; height: 3px; border-radius: 2px;
+  background: var(--border);
+}
+.step-dot.on { background: var(--green); }
+
+.amount-box {
+  background: var(--card2);
+  border-radius: 14px;
+  padding: 16px;
+  text-align: center;
+  border: 1px solid var(--border);
+}
+.amount-box .val {
+  font-family: 'Space Mono', monospace;
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--green-xs);
+  letter-spacing: -1px;
+}
+.amount-box .unit { font-size: 11px; color: var(--dim); }
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.key {
+  background: var(--card);
+  border-radius: 10px;
+  height: 40px;
+  display: grid; place-items: center;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--green-xs);
+}
+.key.wide { grid-column: span 2; }
+.key.muted { color: var(--dim); font-size: 13px; }
+
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.type-card {
+  background: var(--card2);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 6px;
+  text-align: center;
+  font-size: 9px;
+  color: var(--dim);
+}
+.type-card.on {
+  border-color: var(--green);
+  background: rgba(29,158,117,.15);
+  color: var(--green-xs);
+}
+.type-card svg { width: 18px; height: 18px; margin-bottom: 4px; }
+
+.stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.val-lg {
+  font-family: 'Space Mono', monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--green-xs);
+}
+.val-sub { font-size: 8px; color: var(--dim); margin-top: 2px; }
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  height: 56px;
+  gap: 4px;
+  margin-top: 8px;
+}
+.bar-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  height: 100%;
+  justify-content: flex-end;
+}
+.bar {
+  width: 100%;
+  border-radius: 4px 4px 2px 2px;
+  background: var(--green);
+  min-height: 4px;
+}
+.bar.dim { background: rgba(29,158,117,.35); }
+.bar-day { font-size: 7px; color: var(--dim); }
+
+.tx-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(29,77,56,.5);
+}
+.tx-row:last-child { border-bottom: none; }
+.tx-ico {
+  width: 26px; height: 26px;
+  border-radius: 8px;
+  background: rgba(29,158,117,.15);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.tx-ico svg { width: 12px; height: 12px; }
+.tx-name { font-size: 11px; font-weight: 500; color: var(--text); }
+.tx-time { font-size: 8px; color: var(--dim); }
+.tx-amt {
+  margin-left: auto;
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ok);
+}
+.tx-amt.neg { color: var(--coral); }
+
+.ring-wrap {
+  position: relative;
+  width: 100px; height: 100px;
+  margin: 0 auto 8px;
+}
+.ring-wrap svg { width: 100%; height: 100%; }
+.ring-num {
+  position: absolute;
+  inset: 0;
+  display: grid; place-items: center;
+  font-family: 'Space Mono', monospace;
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--green-xs);
+}
+.score-lbl { text-align: center; font-size: 9px; color: var(--dim); }
+.score-badge {
+  display: block;
+  width: fit-content;
+  margin: 8px auto 0;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--green);
+  background: rgba(29,158,117,.15);
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
+
+.crit-row { margin-bottom: 8px; }
+.crit-top {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9px;
+  margin-bottom: 4px;
+}
+.crit-name { color: var(--green-xs); }
+.crit-pct { color: var(--dim); font-family: 'Space Mono', monospace; }
+.prog {
+  height: 5px;
+  background: rgba(0,0,0,.25);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.prog > i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--green), var(--green-lt));
+  border-radius: 3px;
+}
+
+.seg {
+  display: flex;
+  background: var(--card2);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+.seg button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 7px;
+  border-radius: 8px;
+  font-family: inherit;
+}
+.seg button.on {
+  background: var(--green);
+  color: var(--text);
+}
+
+.otp {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.otp span {
+  width: 40px; height: 48px;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--card2);
+  display: grid; place-items: center;
+  font-family: 'Space Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--green-xs);
+}
+.otp span.on { border-color: var(--green); }
+
+.meter {
+  display: flex; gap: 3px; margin-top: 6px;
+}
+.meter i {
+  flex: 1; height: 4px; border-radius: 2px;
+  background: var(--border);
+}
+.meter i.on { background: var(--green); }
+.meter i.warn { background: var(--amber); }
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(29,77,56,.45);
+}
+.list-item:last-child { border-bottom: none; }
+.check {
+  width: 18px; height: 18px;
+  border-radius: 5px;
+  border: 1.5px solid var(--green);
+  background: var(--green);
+  display: grid; place-items: center;
+  flex-shrink: 0;
+}
+.check.empty {
+  background: transparent;
+}
+
+.fab {
+  position: absolute;
+  right: 14px; bottom: 62px;
+  width: 44px; height: 44px;
+  border-radius: 14px;
+  background: var(--green);
+  display: grid; place-items: center;
+  box-shadow: 0 8px 24px rgba(29,158,117,.4);
+  z-index: 5;
+}
+
+.toast {
+  background: var(--elevated);
+  border: 1px solid var(--green);
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--green-xs);
+}
+
+.empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--dim);
+  font-size: 11px;
+}
+.empty-ico {
+  width: 56px; height: 56px;
+  border-radius: 16px;
+  background: rgba(29,158,117,.12);
+  display: grid; place-items: center;
+  margin-bottom: 4px;
+}
+
+.offer-card {
+  background:
+    linear-gradient(145deg, rgba(29,158,117,.35), rgba(15,45,34,.9)),
+    var(--card);
+  border: 1px solid var(--green);
+  border-radius: 14px;
+  padding: 14px;
+}
+.offer-card .amt {
+  font-family: 'Space Mono', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--green-xs);
+}
+.offer-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  font-size: 9px;
+  color: var(--dim);
+}
+
+.slider-track {
+  height: 6px;
+  background: var(--card2);
+  border-radius: 3px;
+  margin: 12px 0 6px;
+  position: relative;
+}
+.slider-fill {
+  width: 62%;
+  height: 100%;
+  background: var(--green);
+  border-radius: 3px;
+}
+.slider-thumb {
+  position: absolute;
+  left: 62%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--text);
+  border: 3px solid var(--green);
+}
+
+.profile-hero {
+  text-align: center;
+  padding: 8px 0 4px;
+}
+.profile-hero .avatar {
+  width: 56px; height: 56px;
+  font-size: 16px;
+  margin: 0 auto 8px;
+}
+.badge-row { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; }
+
+.note {
+  max-width: 1400px;
+  margin: 48px auto 0;
+  padding: 16px 20px;
+  border-radius: 12px;
+  border: 1px dashed var(--border);
+  background: rgba(15,61,46,.3);
+  font-size: 12px;
+  color: var(--dim);
+  line-height: 1.5;
+}
+.note strong { color: var(--green-xs); }
+
+.voice-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239,159,39,.12);
+  border: 1px solid rgba(239,159,39,.4);
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 9px;
+  color: var(--amber);
+}
+.pulse {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--amber);
+  animation: pulse 1.2s ease infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: .4; transform: scale(1.3); }
+}
+
+.map-dot {
+  width: 100%;
+  height: 72px;
+  border-radius: 10px;
+  background:
+    radial-gradient(circle at 55% 48%, var(--green) 0 4px, transparent 5px),
+    linear-gradient(135deg, #0A2A1F, #1A4D38 40%, #0F3D2E);
+  border: 1px solid var(--border);
+  position: relative;
+}
+.map-dot::after {
+  content: 'Ouagadougou · Zone 4';
+  position: absolute;
+  bottom: 8px; left: 10px;
+  font-size: 8px;
+  color: var(--green-lt);
+}
+
+.hist-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  padding: 5px 0;
+}
+.hist-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  flex-shrink: 0;
+}
+.hist-dot.old { background: var(--border); }
+.hist-val { margin-left: auto; font-family: 'Space Mono', monospace; color: var(--green-xs); }
+
+.dash-hdr {
+  padding: 18px 14px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--card2);
+}
+.greet { font-size: 9px; color: var(--dim); }
+.uname { font-size: 14px; font-weight: 600; color: var(--green-xs); }
+
+.mini-tabs {
+  display: flex; gap: 6px; overflow: hidden;
+}
+.mini-tab {
+  font-size: 9px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--card2);
+  color: var(--dim);
+  white-space: nowrap;
+}
+.mini-tab.on {
+  background: rgba(29,158,117,.2);
+  color: var(--green-xs);
+  border: 1px solid var(--green);
+}
+</style>
+</head>
+<body>
+
+<header class="board-header">
+  <div class="eyebrow">NeoForma · Design Board Figma-ready</div>
+  <h1>Design system &amp; parcours app complets</h1>
+  <p class="lead">
+    Board haute fidélité pour l’app d’inclusion financière NeoForma (Burkina Faso) —
+    tokens, composants et flux utilisateur de bout en bout. Ouvir dans le navigateur ;
+    importer dans Figma via html.to.design / Anima / capture frame-by-frame.
+  </p>
+  <div class="meta-row">
+    <span class="chip">iOS / Android · 390×844</span>
+    <span class="chip">DM Sans + Space Mono</span>
+    <span class="chip">Teal Forest System</span>
+    <span class="chip">POESAM / DAMINA 2026</span>
+    <span class="chip">22 écrans · 1 DS</span>
+  </div>
+</header>
+
+<!-- ═══════════════ 00 DESIGN SYSTEM ═══════════════ -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">00</span>
+    <h2>Design system</h2>
+    <p>Tokens couleur, typo, composants de base</p>
+  </div>
+  <div class="tokens">
+    <div class="token-card">
+      <h3>Couleurs</h3>
+      <div class="swatch-grid">
+        <div class="sw"><div class="sw-box" style="background:#07140F"></div><span>Bg #07140F</span></div>
+        <div class="sw"><div class="sw-box" style="background:#0F3D2E"></div><span>Surface</span></div>
+        <div class="sw"><div class="sw-box" style="background:#1A4D38"></div><span>Card</span></div>
+        <div class="sw"><div class="sw-box" style="background:#1D9E75"></div><span>Primary</span></div>
+        <div class="sw"><div class="sw-box" style="background:#5DCAA5"></div><span>Dim</span></div>
+        <div class="sw"><div class="sw-box" style="background:#9FE1CB"></div><span>Accent</span></div>
+        <div class="sw"><div class="sw-box" style="background:#EF9F27"></div><span>Amber</span></div>
+        <div class="sw"><div class="sw-box" style="background:#D85A30"></div><span>Coral</span></div>
+      </div>
+    </div>
+    <div class="token-card">
+      <h3>Typographie</h3>
+      <div class="type-sample">
+        <div class="name">Space Mono · Display</div>
+        <div class="demo-lg">NeoForma</div>
+      </div>
+      <div class="type-sample">
+        <div class="name">DM Sans · Semibold 15</div>
+        <div class="demo-md">Ton passeport financier</div>
+      </div>
+      <div class="type-sample">
+        <div class="name">DM Sans · Regular 12</div>
+        <div class="demo-sm">Enregistre tes ventes. Construis ton NeoScore. Accède au crédit.</div>
+      </div>
+    </div>
+    <div class="token-card">
+      <h3>Composants</h3>
+      <div class="comp-row">
+        <div class="btn btn-p">Primaire</div>
+        <div class="btn btn-o">Outline</div>
+        <div class="btn btn-g">Secondaire</div>
+      </div>
+      <div class="comp-row">
+        <span class="pill">LIVE</span>
+        <span class="pill" style="border-color:var(--amber);color:var(--amber);background:rgba(239,159,39,.12)">Crédit éligible</span>
+        <div class="avatar">AK</div>
+      </div>
+      <div class="input focus" style="margin-top:4px">
+        <span>+226 70 00 00 00</span>
+        <div class="cursor"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 01 ONBOARDING ═══════════════ -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">01</span>
+    <h2>Onboarding &amp; langues</h2>
+    <p>Première ouverture · FR / Moore / Dioula / Fulfulde</p>
+  </div>
+  <div class="flow">
+
+    <!-- Splash -->
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="splash">
+          <div class="logo-lg">
+            <svg viewBox="0 0 26 26" fill="none">
+              <path d="M13 2L2 8v10l11 6 11-6V8L13 2z" stroke="#E1F5EE" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M13 2v15M2 8l11 6 11-6" stroke="#E1F5EE" stroke-width="1.8"/>
+            </svg>
+          </div>
+          <div class="brand">NeoForma</div>
+          <div class="tagline">Ton cahier numérique,<br>ton passeport financier</div>
+          <div style="margin-top:24px;width:40%;height:3px;background:rgba(29,158,117,.3);border-radius:2px;overflow:hidden">
+            <div style="width:65%;height:100%;background:var(--green);border-radius:2px"></div>
+          </div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">01.1</span> Splash</div>
+    </div>
+
+    <!-- Language -->
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr"><div class="s-hdr-title">Choisir la langue</div></div>
+        <div class="s-body">
+          <p style="font-size:11px;color:var(--dim);line-height:1.4;margin-bottom:4px">L’app s’adapte à ta langue. Tu pourras changer plus tard.</p>
+          <div class="lang-grid">
+            <div class="lang-card on"><div class="code">FR</div><div class="name">Français</div></div>
+            <div class="lang-card"><div class="code">MR</div><div class="name">Mooré</div></div>
+            <div class="lang-card"><div class="code">DL</div><div class="name">Dioula</div></div>
+            <div class="lang-card"><div class="code">FF</div><div class="name">Fulfuldé</div></div>
+          </div>
+          <div class="voice-bar" style="margin-top:auto">
+            <div class="pulse"></div>
+            Mode vocal disponible — appuie longuement sur le micro
+          </div>
+          <div class="btn btn-p">Continuer</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">01.2</span> Langue</div>
+    </div>
+
+    <!-- Welcome value -->
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-body" style="padding-top:28px;justify-content:center;gap:16px">
+          <div class="steps"><div class="step-dot on"></div><div class="step-dot on"></div><div class="step-dot"></div></div>
+          <div class="empty-ico" style="margin:0 auto">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M4 19V5l8-3 8 3v14l-8 3-8-3z" stroke="#9FE1CB" stroke-width="1.5"/><path d="M12 8v8M8 12h8" stroke="#9FE1CB" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div style="text-align:center">
+            <div style="font-size:16px;font-weight:600;color:var(--green-xs);margin-bottom:8px">Trois gestes, un score</div>
+            <div style="font-size:11px;color:var(--dim);line-height:1.5">1. Enregistre tes ventes<br>2. Suis tes créances<br>3. Construis ton NeoScore</div>
+          </div>
+          <div class="btn btn-p" style="margin-top:auto">Créer mon compte</div>
+          <div class="btn btn-o">J’ai déjà un compte</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">01.3</span> Proposition de valeur</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 02 AUTH ═══════════════ -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">02</span>
+    <h2>Authentification</h2>
+    <p>Téléphone + PIN · OTP Mobile Money friendly</p>
+  </div>
+  <div class="flow">
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-body" style="padding-top:36px;align-items:center;gap:12px">
+          <div class="logo-lg" style="width:48px;height:48px;border-radius:14px">
+            <svg viewBox="0 0 26 26" fill="none" width="24" height="24">
+              <path d="M13 2L2 8v10l11 6 11-6V8L13 2z" stroke="#E1F5EE" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M13 2v15M2 8l11 6 11-6" stroke="#E1F5EE" stroke-width="1.8"/>
+            </svg>
+          </div>
+          <div class="brand" style="font-size:20px">NeoForma</div>
+          <div class="tagline">Connexion</div>
+          <div class="input focus" style="width:100%;margin-top:8px">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="1" y="3" width="10" height="7.5" rx="1" stroke="#5DCAA5" stroke-width="1"/><path d="M3.5 3V2.5A2.5 2.5 0 018.5 2.5V3" stroke="#5DCAA5" stroke-width="1"/></svg>
+            <span>+226 70 12 34 56</span>
+            <div class="cursor"></div>
+          </div>
+          <div class="input" style="width:100%">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="5" r="2" stroke="#5DCAA5" stroke-width="1"/><path d="M2 11c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#5DCAA5" stroke-width="1"/></svg>
+            <span>● ● ● ●</span>
+          </div>
+          <div class="btn btn-p" style="width:100%;margin-top:4px">Se connecter</div>
+          <div class="btn btn-o" style="width:100%">Créer un compte</div>
+          <div style="font-size:9px;color:var(--dim);margin-top:auto">Code PIN oublié ?</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">02.1</span> Login</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr">
+          <div class="back"><svg viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="s-hdr-title">Vérification</div>
+        </div>
+        <div class="s-body" style="padding-top:20px;align-items:center;text-align:center">
+          <div style="font-size:13px;font-weight:600;color:var(--green-xs)">Code SMS envoyé</div>
+          <div style="font-size:10px;color:var(--dim);line-height:1.4;margin:4px 0 16px">Au +226 70 12 34 56<br>Valable 5 minutes</div>
+          <div class="otp">
+            <span>4</span><span>7</span><span class="on">_</span><span></span>
+          </div>
+          <div style="font-size:9px;color:var(--dim);margin-top:16px">Renvoyer le code · 0:42</div>
+          <div class="btn btn-p" style="width:100%;margin-top:auto;opacity:.45">Valider</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">02.2</span> OTP SMS</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr">
+          <div class="back"><svg viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="s-hdr-title">Créer un PIN</div>
+        </div>
+        <div class="s-body" style="align-items:center;padding-top:24px">
+          <div style="font-size:11px;color:var(--dim);text-align:center;margin-bottom:12px">4 chiffres · facile à retenir,<br>difficile à deviner</div>
+          <div class="otp">
+            <span>●</span><span>●</span><span>●</span><span class="on">|</span>
+          </div>
+          <div class="keypad" style="width:100%;margin-top:auto">
+            <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+            <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+            <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+            <div class="key muted"> </div><div class="key">0</div><div class="key muted">⌫</div>
+          </div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">02.3</span> Création PIN</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 03 KYC LIGHT ═══════════════ -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">03</span>
+    <h2>Profil activité (KYC léger)</h2>
+    <p>Aligné questionnaire KoboCollect / NeoScore</p>
+  </div>
+  <div class="flow">
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr"><div class="s-hdr-title">Ton activité</div></div>
+        <div class="s-body scroll">
+          <div class="steps"><div class="step-dot on"></div><div class="step-dot"></div><div class="step-dot"></div><div class="step-dot"></div></div>
+          <div class="lbl">Corps de métier</div>
+          <div class="mini-tabs">
+            <div class="mini-tab on">Commerce</div>
+            <div class="mini-tab">Artisanat</div>
+            <div class="mini-tab">Mécanique</div>
+          </div>
+          <div class="lbl" style="margin-top:6px">Ancienneté</div>
+          <div class="seg">
+            <button>&lt;1 an</button>
+            <button class="on">3–5 ans</button>
+            <button>&gt;10 ans</button>
+          </div>
+          <div class="lbl" style="margin-top:6px">CA journalier estimé</div>
+          <div class="seg">
+            <button>&lt;5k</button>
+            <button class="on">15–30k</button>
+            <button>&gt;60k</button>
+          </div>
+          <div class="btn btn-p" style="margin-top:auto">Suivant</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">03.1</span> Métier &amp; CA</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr"><div class="s-hdr-title">Fiabilité</div></div>
+        <div class="s-body">
+          <div class="steps"><div class="step-dot on"></div><div class="step-dot on"></div><div class="step-dot"></div><div class="step-dot"></div></div>
+          <div class="s-card">
+            <div class="lbl">Tontine</div>
+            <div class="seg">
+              <button class="on">Oui</button>
+              <button>Non</button>
+            </div>
+            <div class="lbl" style="margin-top:10px">Cotisation / mois</div>
+            <div class="input">5 000 FCFA</div>
+          </div>
+          <div class="s-card">
+            <div class="lbl">Mobile Money</div>
+            <div class="seg">
+              <button>Jamais</button>
+              <button>Parfois</button>
+              <button class="on">Souvent</button>
+            </div>
+          </div>
+          <div class="s-card">
+            <div class="lbl">Compte bancaire</div>
+            <div class="seg">
+              <button class="on">Non</button>
+              <button>Oui</button>
+            </div>
+          </div>
+          <div class="btn btn-p" style="margin-top:auto">Suivant</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">03.2</span> Tontine &amp; MM</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr"><div class="s-hdr-title">Consentement</div></div>
+        <div class="s-body">
+          <div class="steps"><div class="step-dot on"></div><div class="step-dot on"></div><div class="step-dot on"></div><div class="step-dot on"></div></div>
+          <p style="font-size:11px;color:var(--dim);line-height:1.45">Tes données construisent ton NeoScore. Tu contrôles ce qui est partagé.</p>
+          <div class="s-card" style="padding:4px 12px">
+            <div class="list-item">
+              <div class="check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#E1F5EE" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+              <div>
+                <div class="tx-name">Données anonymisées</div>
+                <div class="tx-time">Pour améliorer le modèle</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="check"><svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2 2 4-4" stroke="#E1F5EE" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+              <div>
+                <div class="tx-name">Partage partenaires crédit</div>
+                <div class="tx-time">Uniquement si tu demandes un prêt</div>
+              </div>
+            </div>
+            <div class="list-item">
+              <div class="check empty"></div>
+              <div>
+                <div class="tx-name">Marketing partenaires</div>
+                <div class="tx-time">Optionnel</div>
+              </div>
+            </div>
+          </div>
+          <div class="map-dot"></div>
+          <div class="btn btn-p" style="margin-top:auto">Activer mon NeoScore</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">03.3</span> Consentement &amp; lieu</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 04 HOME ═══════════════ -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">04</span>
+    <h2>Accueil &amp; opérations</h2>
+    <p>Cœur produit · cahier numérique</p>
+  </div>
+  <div class="flow">
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="dash-hdr">
+          <div>
+            <div class="greet">Bonjour,</div>
+            <div class="uname">Aminata K.</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <span class="pill">76</span>
+            <div class="avatar">AK</div>
+          </div>
+        </div>
+        <div class="s-body scroll" style="padding-bottom:4px">
+          <div class="stat-row">
+            <div class="s-card">
+              <div class="lbl">Ce mois</div>
+              <div class="val-lg">147 500</div>
+              <div class="val-sub">FCFA de ventes</div>
+            </div>
+            <div class="s-card">
+              <div class="lbl">Créances</div>
+              <div class="val-lg" style="color:#EF9F27">23 000</div>
+              <div class="val-sub">FCFA à récupérer</div>
+            </div>
+          </div>
+          <div class="s-card">
+            <div class="lbl">Ventes · 7 jours</div>
+            <div class="bars">
+              <div class="bar-col"><div class="bar dim" style="height:28%"></div><div class="bar-day">L</div></div>
+              <div class="bar-col"><div class="bar dim" style="height:42%"></div><div class="bar-day">M</div></div>
+              <div class="bar-col"><div class="bar dim" style="height:22%"></div><div class="bar-day">M</div></div>
+              <div class="bar-col"><div class="bar" style="height:58%"></div><div class="bar-day">J</div></div>
+              <div class="bar-col"><div class="bar dim" style="height:36%"></div><div class="bar-day">V</div></div>
+              <div class="bar-col"><div class="bar" style="height:72%"></div><div class="bar-day">S</div></div>
+              <div class="bar-col"><div class="bar" style="height:50%"></div><div class="bar-day">D</div></div>
+            </div>
+          </div>
+          <div class="s-card" style="padding:6px 12px">
+            <div class="lbl">Dernières opérations</div>
+            <div class="tx-row">
+              <div class="tx-ico"><svg viewBox="0 0 10 10" fill="none"><rect x="1" y="3" width="8" height="6" rx=".8" stroke="#9FE1CB" stroke-width=".9"/></svg></div>
+              <div><div class="tx-name">Vente savon</div><div class="tx-time">Auj. · 09:14</div></div>
+              <div class="tx-amt">+1 500</div>
+            </div>
+            <div class="tx-row">
+              <div class="tx-ico"><svg viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="3.5" stroke="#9FE1CB" stroke-width=".9"/></svg></div>
+              <div><div class="tx-name">Dette · Koné</div><div class="tx-time">Hier · 16:30</div></div>
+              <div class="tx-amt neg">−5 000</div>
+            </div>
+          </div>
+        </div>
+        <div class="fab">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v12M3 9h12" stroke="#E1F5EE" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item on">
+            <svg viewBox="0 0 14 14" fill="none"><path d="M1 5.5L7 1l6 4.5v7H1v-7z" stroke="#1D9E75" stroke-width="1"/></svg>
+            <div class="nav-dot"></div>Accueil
+          </div>
+          <div class="nav-item">
+            <svg viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="12" height="10" rx="1" stroke="#5DCAA5" stroke-width="1"/></svg>
+            Ventes
+          </div>
+          <div class="nav-item">
+            <svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="#5DCAA5" stroke-width="1"/></svg>
+            Dettes
+          </div>
+          <div class="nav-item">
+            <svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="5" r="2.5" stroke="#5DCAA5" stroke-width="1"/><path d="M2 13c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="#5DCAA5" stroke-width="1"/></svg>
+            Profil
+          </div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">04.1</span> Tableau de bord</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr">
+          <div class="back"><svg viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="s-hdr-title">Enregistrer</div>
+        </div>
+        <div class="s-body">
+          <div class="lbl">Type d’opération</div>
+          <div class="type-grid">
+            <div class="type-card on">
+              <svg viewBox="0 0 16 16" fill="none"><rect x="2" y="5" width="12" height="8.5" rx="1" stroke="#1D9E75" stroke-width="1.2"/></svg>
+              Vente
+            </div>
+            <div class="type-card">
+              <svg viewBox="0 0 16 16" fill="none"><path d="M3 13.5L5 5h6l2 8.5H3z" stroke="#5DCAA5" stroke-width="1.2"/></svg>
+              Stock
+            </div>
+            <div class="type-card">
+              <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="#5DCAA5" stroke-width="1.2"/></svg>
+              Dette
+            </div>
+          </div>
+          <div class="amount-box">
+            <div class="lbl" style="text-align:center">Montant</div>
+            <div class="val">2 500</div>
+            <div class="unit">FCFA</div>
+          </div>
+          <div class="keypad">
+            <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+            <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+            <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+            <div class="key wide">000</div><div class="key muted">⌫</div>
+          </div>
+          <div class="btn btn-p">Confirmer la vente</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">04.2</span> Saisie vente</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr">
+          <div class="back"><svg viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="s-hdr-title">Nouvelle dette</div>
+        </div>
+        <div class="s-body">
+          <div class="lbl">Client</div>
+          <div class="input focus">Koné Ibrahim<div class="cursor"></div></div>
+          <div class="lbl">Montant prêté</div>
+          <div class="amount-box" style="padding:12px">
+            <div class="val" style="font-size:26px">5 000</div>
+            <div class="unit">FCFA</div>
+          </div>
+          <div class="lbl">Échéance</div>
+          <div class="seg">
+            <button>3 j</button>
+            <button class="on">7 j</button>
+            <button>14 j</button>
+            <button>30 j</button>
+          </div>
+          <div class="voice-bar">
+            <div class="pulse"></div>
+            Dicter : « Dette Koné cinq mille, une semaine »
+          </div>
+          <div class="btn btn-p" style="margin-top:auto">Enregistrer la dette</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">04.3</span> Saisie dette + vocal</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-body" style="justify-content:center;align-items:center;gap:16px;text-align:center">
+          <div style="width:72px;height:72px;border-radius:50%;background:rgba(29,158,117,.2);border:2px solid var(--green);display:grid;place-items:center">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L20 7" stroke="#1D9E75" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div style="font-size:16px;font-weight:600;color:var(--green-xs)">Vente enregistrée</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:6px">+2 500 FCFA · NeoScore +0.3</div>
+          </div>
+          <div class="toast" style="width:100%">
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5.5" stroke="#5DCAA5"/><path d="M7 4v3.5l2 1" stroke="#5DCAA5" stroke-linecap="round"/></svg>
+            Régularité en hausse cette semaine
+          </div>
+          <div class="btn-row" style="width:100%;margin-top:auto">
+            <div class="btn btn-o">Accueil</div>
+            <div class="btn btn-p">Nouvelle</div>
+          </div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">04.4</span> Succès opération</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 05 LISTES ═══════════════ -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">05</span>
+    <h2>Ventes &amp; dettes</h2>
+    <p>Historique, filtres, états vides</p>
+  </div>
+  <div class="flow">
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr"><div class="s-hdr-title">Ventes</div><span class="pill">Mars</span></div>
+        <div class="s-body scroll">
+          <div class="seg">
+            <button class="on">Jour</button>
+            <button>Semaine</button>
+            <button>Mois</button>
+          </div>
+          <div class="s-card">
+            <div class="lbl">Total aujourd’hui</div>
+            <div class="val-lg">18 500 FCFA</div>
+            <div class="val-sub">12 opérations</div>
+          </div>
+          <div class="s-card" style="padding:4px 12px">
+            <div class="tx-row"><div class="tx-ico"></div><div><div class="tx-name">Huile 1L</div><div class="tx-time">10:22</div></div><div class="tx-amt">+2 000</div></div>
+            <div class="tx-row"><div class="tx-ico"></div><div><div class="tx-name">Savon lot</div><div class="tx-time">09:14</div></div><div class="tx-amt">+1 500</div></div>
+            <div class="tx-row"><div class="tx-ico"></div><div><div class="tx-name">Riz 2kg</div><div class="tx-time">08:01</div></div><div class="tx-amt">+3 000</div></div>
+            <div class="tx-row"><div class="tx-ico"></div><div><div class="tx-name">Recharge MM</div><div class="tx-time">07:40</div></div><div class="tx-amt">+500</div></div>
+          </div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item">Accueil</div>
+          <div class="nav-item on"><div class="nav-dot"></div>Ventes</div>
+          <div class="nav-item">Dettes</div>
+          <div class="nav-item">Profil</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">05.1</span> Liste ventes</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr"><div class="s-hdr-title">Dettes clients</div></div>
+        <div class="s-body scroll">
+          <div class="s-card" style="border-color:rgba(239,159,39,.4);border-style:solid;border-width:1px">
+            <div class="lbl">À récupérer</div>
+            <div class="val-lg" style="color:var(--amber)">23 000 FCFA</div>
+            <div class="meter"><i class="warn on"></i><i class="warn on"></i><i class="on"></i><i></i><i></i></div>
+            <div class="val-sub" style="margin-top:4px">3 dettes ouvertes · 1 en retard</div>
+          </div>
+          <div class="s-card" style="padding:4px 12px">
+            <div class="tx-row">
+              <div class="avatar" style="width:26px;height:26px;font-size:8px">KI</div>
+              <div><div class="tx-name">Koné Ibrahim</div><div class="tx-time">Échéance hier</div></div>
+              <div class="tx-amt neg">5 000</div>
+            </div>
+            <div class="tx-row">
+              <div class="avatar" style="width:26px;height:26px;font-size:8px;background:var(--elevated)">FS</div>
+              <div><div class="tx-name">Fatou S.</div><div class="tx-time">Dans 3 jours</div></div>
+              <div class="tx-amt" style="color:var(--amber)">8 000</div>
+            </div>
+            <div class="tx-row">
+              <div class="avatar" style="width:26px;height:26px;font-size:8px;background:var(--elevated)">MO</div>
+              <div><div class="tx-name">Moussa O.</div><div class="tx-time">Dans 12 jours</div></div>
+              <div class="tx-amt" style="color:var(--green-xs)">10 000</div>
+            </div>
+          </div>
+          <div class="btn btn-o">Relancer Koné (SMS)</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item">Accueil</div>
+          <div class="nav-item">Ventes</div>
+          <div class="nav-item on"><div class="nav-dot"></div>Dettes</div>
+          <div class="nav-item">Profil</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">05.2</span> Dettes &amp; relance</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr"><div class="s-hdr-title">Ventes</div></div>
+        <div class="empty">
+          <div class="empty-ico">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><rect x="3" y="6" width="18" height="14" rx="2" stroke="#5DCAA5" stroke-width="1.5"/><path d="M8 6V5a4 4 0 018 0v1" stroke="#5DCAA5" stroke-width="1.5"/></svg>
+          </div>
+          Aucune vente aujourd’hui
+          <div style="font-size:10px;opacity:.8">Appuie sur + pour enregistrer ta première opération</div>
+          <div class="btn btn-p" style="margin-top:8px;width:100%">Enregistrer une vente</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item">Accueil</div>
+          <div class="nav-item on"><div class="nav-dot"></div>Ventes</div>
+          <div class="nav-item">Dettes</div>
+          <div class="nav-item">Profil</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">05.3</span> État vide</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 06 NEOSCORE ═══════════════ -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">06</span>
+    <h2>NeoScore &amp; crédit</h2>
+    <p>Score 0–100 · offre · demande · décision</p>
+  </div>
+  <div class="flow">
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr">
+          <div class="back"><svg viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="s-hdr-title">NeoScore</div>
+          <span class="pill">LIVE</span>
+        </div>
+        <div class="s-body scroll">
+          <div class="s-card" style="text-align:center;padding:14px">
+            <div class="ring-wrap">
+              <svg viewBox="0 0 70 70">
+                <circle cx="35" cy="35" r="28" fill="none" stroke="#0A2A1F" stroke-width="7"/>
+                <circle cx="35" cy="35" r="28" fill="none" stroke="#1D9E75" stroke-width="7"
+                  stroke-dasharray="176" stroke-dashoffset="42" stroke-linecap="round"
+                  transform="rotate(-90 35 35)"/>
+              </svg>
+              <div class="ring-num">76</div>
+            </div>
+            <div class="score-lbl">Score NeoScore · sur 100</div>
+            <div class="score-badge">✓ Profil fiable · Segment B</div>
+          </div>
+          <div class="s-card">
+            <div class="lbl">Détail du score</div>
+            <div class="crit-row"><div class="crit-top"><span class="crit-name">Régularité</span><span class="crit-pct">88%</span></div><div class="prog"><i style="width:88%"></i></div></div>
+            <div class="crit-row"><div class="crit-top"><span class="crit-name">Volume</span><span class="crit-pct">72%</span></div><div class="prog"><i style="width:72%"></i></div></div>
+            <div class="crit-row"><div class="crit-top"><span class="crit-name">Dettes</span><span class="crit-pct">65%</span></div><div class="prog"><i style="width:65%"></i></div></div>
+            <div class="crit-row"><div class="crit-top"><span class="crit-name">Croissance</span><span class="crit-pct">80%</span></div><div class="prog"><i style="width:80%"></i></div></div>
+          </div>
+          <div class="btn btn-p">Demander un crédit</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">06.1</span> Détail NeoScore</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr">
+          <div class="back"><svg viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="s-hdr-title">Offre de crédit</div>
+        </div>
+        <div class="s-body">
+          <div class="offer-card">
+            <div class="lbl" style="color:var(--green-lt)">Montant estimé</div>
+            <div class="amt">150 000</div>
+            <div class="unit" style="font-size:11px;color:var(--green-lt)">FCFA · pré-approuvé</div>
+            <div class="offer-meta">
+              <span>Durée 3 mois</span>
+              <span>Taux indicatif 2,5%/mois</span>
+            </div>
+          </div>
+          <div class="s-card">
+            <div class="lbl">Ajuster le montant</div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--green-xs)">
+              <span>50k</span><span style="font-family:'Space Mono',monospace;font-weight:700">150 000</span><span>250k</span>
+            </div>
+            <div class="slider-track">
+              <div class="slider-fill"></div>
+              <div class="slider-thumb"></div>
+            </div>
+          </div>
+          <div class="s-card">
+            <div class="hist-row"><div class="hist-dot old"></div>Janvier<div class="hist-val">58</div></div>
+            <div class="hist-row"><div class="hist-dot old"></div>Février<div class="hist-val">67</div></div>
+            <div class="hist-row"><div class="hist-dot"></div>Mars<div class="hist-val">76</div></div>
+          </div>
+          <div class="btn btn-p" style="margin-top:auto">Continuer la demande</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">06.2</span> Offre pré-approuvée</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr">
+          <div class="back"><svg viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="s-hdr-title">Demande</div>
+        </div>
+        <div class="s-body">
+          <div class="lbl">Usage du crédit</div>
+          <div class="lang-grid">
+            <div class="lang-card on" style="padding:12px"><div class="code" style="font-size:11px">Stock</div></div>
+            <div class="lang-card" style="padding:12px"><div class="code" style="font-size:11px">Équipement</div></div>
+            <div class="lang-card" style="padding:12px"><div class="code" style="font-size:11px">Fonds de roulement</div></div>
+            <div class="lang-card" style="padding:12px"><div class="code" style="font-size:11px">Autre</div></div>
+          </div>
+          <div class="lbl" style="margin-top:4px">Remboursement</div>
+          <div class="seg">
+            <button>Hebdo</button>
+            <button class="on">Mensuel</button>
+          </div>
+          <div class="s-card">
+            <div class="lbl">Récap</div>
+            <div class="hist-row">Montant<div class="hist-val">150 000</div></div>
+            <div class="hist-row">Échéances<div class="hist-val">3 × 55k</div></div>
+            <div class="hist-row">1re échéance<div class="hist-val">12 août</div></div>
+          </div>
+          <div class="btn btn-p" style="margin-top:auto">Soumettre</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">06.3</span> Formulaire crédit</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-body" style="justify-content:center;align-items:center;text-align:center;gap:14px">
+          <div style="width:72px;height:72px;border-radius:50%;background:rgba(29,158,117,.2);border:2px solid var(--green);display:grid;place-items:center;font-family:'Space Mono',monospace;font-size:20px;font-weight:700;color:var(--green-xs)">OK</div>
+          <div>
+            <div style="font-size:16px;font-weight:600;color:var(--green-xs)">Demande envoyée</div>
+            <div style="font-size:11px;color:var(--dim);margin-top:8px;line-height:1.45">Un partenaire étudie ton dossier.<br>Réponse sous 24–48 h.</div>
+          </div>
+          <div class="s-card" style="width:100%;text-align:left">
+            <div class="hist-row">Réf.<div class="hist-val">NF-2026-0841</div></div>
+            <div class="hist-row">Montant<div class="hist-val">150 000</div></div>
+            <div class="hist-row">Statut<div class="hist-val" style="color:var(--amber)">En cours</div></div>
+          </div>
+          <div class="btn btn-p" style="width:100%;margin-top:auto">Retour à l’accueil</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">06.4</span> Confirmation crédit</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ 07 PROFILE ═══════════════ -->
+<section class="section">
+  <div class="section-head">
+    <span class="section-num">07</span>
+    <h2>Profil &amp; paramètres</h2>
+    <p>Identité, langue, confidentialité</p>
+  </div>
+  <div class="flow">
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr"><div class="s-hdr-title">Profil</div></div>
+        <div class="s-body scroll">
+          <div class="profile-hero">
+            <div class="avatar">AK</div>
+            <div style="font-size:14px;font-weight:600;color:var(--green-xs)">Aminata Kaboré</div>
+            <div style="font-size:10px;color:var(--dim);margin:4px 0 8px">Commerce · Ouagadougou</div>
+            <div class="badge-row">
+              <span class="pill">NeoScore 76</span>
+              <span class="pill" style="border-color:var(--amber);color:var(--amber);background:rgba(239,159,39,.12)">Éligible</span>
+            </div>
+          </div>
+          <div class="s-card" style="padding:4px 12px">
+            <div class="list-item"><div class="tx-name">Modifier mon activité</div><div class="tx-amt" style="color:var(--dim);font-weight:400">›</div></div>
+            <div class="list-item"><div class="tx-name">Langue</div><div class="tx-amt" style="color:var(--dim);font-weight:400;font-size:10px">FR ›</div></div>
+            <div class="list-item"><div class="tx-name">Mode vocal</div><div class="tx-amt" style="color:var(--dim);font-weight:400;font-size:10px">ON ›</div></div>
+            <div class="list-item"><div class="tx-name">Confidentialité</div><div class="tx-amt" style="color:var(--dim);font-weight:400">›</div></div>
+            <div class="list-item"><div class="tx-name">Aide &amp; contact</div><div class="tx-amt" style="color:var(--dim);font-weight:400">›</div></div>
+          </div>
+          <div class="btn btn-o" style="color:var(--coral);border-color:rgba(216,90,48,.5)">Se déconnecter</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item">Accueil</div>
+          <div class="nav-item">Ventes</div>
+          <div class="nav-item">Dettes</div>
+          <div class="nav-item on"><div class="nav-dot"></div>Profil</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">07.1</span> Profil</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr">
+          <div class="back"><svg viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="s-hdr-title">Score trop bas</div>
+        </div>
+        <div class="s-body" style="align-items:center;text-align:center;padding-top:28px">
+          <div class="ring-wrap" style="width:88px;height:88px">
+            <svg viewBox="0 0 70 70">
+              <circle cx="35" cy="35" r="28" fill="none" stroke="#0A2A1F" stroke-width="7"/>
+              <circle cx="35" cy="35" r="28" fill="none" stroke="#D85A30" stroke-width="7"
+                stroke-dasharray="176" stroke-dashoffset="120" stroke-linecap="round"
+                transform="rotate(-90 35 35)"/>
+            </svg>
+            <div class="ring-num" style="font-size:24px;color:#F5B9A8">38</div>
+          </div>
+          <div style="font-size:13px;font-weight:600;color:var(--green-xs);margin-top:8px">Pas encore éligible</div>
+          <div style="font-size:10px;color:var(--dim);line-height:1.45;margin:8px 0 16px">Seuil à 50. Continue d’enregistrer<br>tes ventes 14 jours de plus.</div>
+          <div class="s-card" style="width:100%;text-align:left">
+            <div class="lbl">Pour progresser</div>
+            <div class="hist-row"><div class="hist-dot"></div>1 vente / jour minimum</div>
+            <div class="hist-row"><div class="hist-dot"></div>Réduire les impayés clients</div>
+            <div class="hist-row"><div class="hist-dot"></div>Activer Mobile Money</div>
+          </div>
+          <div class="btn btn-p" style="width:100%;margin-top:auto">Voir mon plan</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">07.2</span> Non-éligible (edge)</div>
+    </div>
+
+    <div class="frame">
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="status"><span>9:41</span><span class="icons">●●● ▮</span></div>
+        <div class="s-hdr">
+          <div class="back"><svg viewBox="0 0 14 14" fill="none"><path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="s-hdr-title">Hors ligne</div>
+        </div>
+        <div class="s-body" style="justify-content:center;align-items:center;text-align:center;gap:12px">
+          <div class="empty-ico">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M2 8c4-4 16-4 20 0M5 12a10 10 0 0114 0M8.5 15.5a5 5 0 017 0" stroke="#5DCAA5" stroke-width="1.5" stroke-linecap="round"/><path d="M4 4l16 16" stroke="#D85A30" stroke-width="1.5" stroke-linecap="round"/></svg>
+          </div>
+          <div style="font-size:14px;font-weight:600;color:var(--green-xs)">Mode hors ligne</div>
+          <div style="font-size:11px;color:var(--dim);line-height:1.45;max-width:200px">Tes ventes sont sauvegardées sur l’appareil. Sync dès le retour du réseau.</div>
+          <div class="toast" style="width:100%;margin-top:8px">3 opérations en attente de sync</div>
+          <div class="btn btn-p" style="width:100%;margin-top:auto">Continuer hors ligne</div>
+        </div>
+      </div>
+      <div class="frame-label"><span class="frame-id">07.3</span> Offline-first</div>
+    </div>
+  </div>
+</section>
+
+<div class="note">
+  <strong>Import Figma :</strong> ouvre ce fichier dans Chrome → plugin
+  <em>html.to.design</em> (ou Anima / Figma Capture) pour convertir chaque frame téléphone en frame Figma.
+  Dimensions source : 260×520 (échelle ~0.67 d’un iPhone 14). Typo : DM Sans + Space Mono.
+  Fichier : <code>DAMINA&amp;POESAM_2026/NeoForma_Design_Figma.html</code>
+</div>
+
+</body>
+</html>

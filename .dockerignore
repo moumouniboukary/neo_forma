@@ -1,0 +1,12 @@
+node_modules
+dist
+.git
+**/android
+**/ios
+**/.env
+**/*.db
+DAMINA&POESAM_2026
+docs
+*.md
+.cursor
+agent-transcripts

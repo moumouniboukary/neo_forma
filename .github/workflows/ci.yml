@@ -1,0 +1,69 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  api:
+    name: API & packages (Node)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: neoforma
+          POSTGRES_PASSWORD: neoforma
+          POSTGRES_DB: neoforma
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U neoforma -d neoforma"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+
+    env:
+      DATABASE_URL: postgresql://neoforma:neoforma@localhost:5432/neoforma?schema=public
+      REDIS_URL: redis://localhost:6379
+      JWT_SECRET: ci-secret-neoforma-min-32-characters
+      NODE_ENV: test
+      CORS_ORIGIN: "*"
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      # Migrations versionnées (au lieu de db push) — vérifie que le schéma migre proprement.
+      - run: npm run db:deploy
+      - run: npm run typecheck
+      - run: npm run test
+      - run: npm run build --workspace=@neoforma/web
+
+  mobile:
+    name: App mobile (Flutter)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: flutter pub get
+        working-directory: apps/mobile
+        run: flutter pub get
+      - name: flutter analyze
+        working-directory: apps/mobile
+        run: flutter analyze
+      - name: flutter test
+        working-directory: apps/mobile
+        run: flutter test

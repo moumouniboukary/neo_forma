@@ -1,0 +1,138 @@
+@startuml NeoForma_Cas_Utilisation
+!theme plain
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+title NeoForma — Cas d'utilisation (corrigé)\nSources : analysis-report, domain-model, uml-review
+
+left to right direction
+
+actor "Travailleur\ninformel" as TI
+actor "Agent terrain" as AT
+actor "Institution de\nmicrofinance (IMF)" as IMF
+actor "Passerelle SMS" as SMS <<système externe>>
+
+rectangle "NeoForma" {
+
+  package "Identité & accès" {
+    usecase "Créer un compte" as UC01
+    usecase "Se connecter (MFA)\nOTP + PIN" as UC02
+    usecase "Se déconnecter" as UC03
+    usecase "Vérifier le numéro\npar OTP" as UC04
+    usecase "Renvoyer un OTP" as UC04b
+  }
+
+  package "Profil & consentements" {
+    usecase "Compléter le profil\nd'activité" as UC05
+    usecase "Gérer les\npréférences" as UC06
+    usecase "Gérer les\nconsentements" as UC07
+    usecase "Vérifier consentement\npartage IMF" as UC07v
+    usecase "Révoquer un\nconsentement" as UC07r
+  }
+
+  package "Cahier numérique" {
+    usecase "Enregistrer une vente" as UC08
+    usecase "Enregistrer un stock" as UC09
+    usecase "Enregistrer une dépense" as UC10
+    usecase "Enregistrer une créance" as UC11
+    usecase "Régler / clôturer\nune créance" as UC11b
+    usecase "Consulter le\ntableau de bord" as UC12
+    usecase "Synchroniser les\nopérations hors ligne" as UC13
+  }
+
+  package "Solvabilité & crédit" {
+    usecase "Consulter le NeoScore" as UC14
+    usecase "Consulter une\noffre de crédit" as UC15
+    usecase "Soumettre une\ndemande de crédit" as UC16
+    usecase "Suivre le statut\nd'une demande" as UC17
+  }
+
+  package "Mise en relation IMF" {
+    usecase "Consulter un profil\nscoré (consenti)" as UC18
+    usecase "Recevoir / traiter\nune demande crédit" as UC19
+  }
+
+  package "Accompagnement" {
+    usecase "Accompagner\nl'onboarding" as UC20
+  }
+}
+
+' --- Acteurs ---
+TI --> UC01
+TI --> UC02
+TI --> UC03
+TI --> UC04b
+TI --> UC05
+TI --> UC06
+TI --> UC07
+TI --> UC07r
+TI --> UC08
+TI --> UC09
+TI --> UC10
+TI --> UC11
+TI --> UC11b
+TI --> UC12
+TI --> UC13
+TI --> UC14
+TI --> UC15
+TI --> UC16
+TI --> UC17
+
+AT --> UC20
+AT ..> UC01 : assiste
+AT ..> UC05 : assiste
+
+IMF --> UC18
+IMF --> UC19
+
+SMS --> UC04 : canal d'envoi
+SMS --> UC04b : canal d'envoi
+
+' --- Includes ---
+UC01 ..> UC04 : <<include>>
+UC02 ..> UC04 : <<include>>
+UC04b ..> UC04 : <<include>>
+
+UC16 ..> UC07v : <<include>>
+UC16 ..> UC15 : <<include>>
+UC18 ..> UC07v : <<include>>
+
+note right of UC02
+  MFA NeoForma
+  1) possession : OTP SMS
+  2) connaissance : PIN
+  Compte doit être **actif**
+  (pas brouillon / suspendu)
+end note
+
+note bottom of UC13
+  UC autonome (pas d'extend).
+  Peut être déclenché après
+  saisie hors ligne (UC08–UC11)
+  ou manuellement / à la reconnexion.
+  Invariant : idempotence
+  (identifiantLocal unique).
+end note
+
+note bottom of UC16
+  Préconditions :
+  - onboarding terminé
+  - compte actif
+  - NeoScore éligible
+  - offre en vigueur
+  - consentement partage IMF = vrai
+end note
+
+note bottom of UC18
+  Préconditions :
+  - partenariat IMF actif
+  - consentement partage valide
+  - anonymisation selon consentement
+end note
+
+note right of AT
+  RM-AT01 : l'agent n'accède
+  jamais au PIN du travailleur
+end note
+
+@enduml

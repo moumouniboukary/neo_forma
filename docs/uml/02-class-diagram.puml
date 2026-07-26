@@ -1,0 +1,430 @@
+@startuml NeoForma_Classes_Metier
+!theme plain
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam class {
+  BackgroundColor #FEFEFE
+  BorderColor #1D9E75
+  HeaderBackgroundColor #E1F5EE
+}
+title NeoForma — Classes métier (corrigé)\nPas d'héritage Operation (HER-01b) — contraintes par type
+
+' ========== ENUMS ==========
+enum StatutCompte {
+  brouillon
+  actif
+  suspendu
+}
+
+enum TypeOperation {
+  vente
+  stock
+  depense
+  creance
+}
+
+enum NatureStock {
+  entree
+  sortie
+}
+
+enum StatutCreance {
+  ouverte
+  en_retard
+  reglee
+  annulee
+}
+
+enum StatutSync {
+  locale
+  synchronisee
+  en_conflit
+}
+
+enum EtatOperationHorsLigne {
+  en_attente
+  acceptee
+  rejetee
+}
+
+enum TypeConsentement {
+  anonymisation_recherche
+  partage_imf
+  marketing_partenaires
+}
+
+enum UsageCredit {
+  stock
+  equipement
+  fonds_roulement
+  autre
+}
+
+enum ModaliteRemboursement {
+  hebdomadaire
+  mensuel
+}
+
+enum StatutDemandeCredit {
+  brouillon
+  soumise
+  en_etude
+  approuvee
+  refusee
+  decaisee
+}
+
+enum SegmentNeoScore {
+  A
+  B
+  C
+  D
+}
+
+enum StatutPartenariat {
+  prospect
+  actif
+  suspendu
+}
+
+enum NiveauAccesImf {
+  consultation
+  api_scoring
+  full
+}
+
+enum StatutCompteBancaire {
+  aucun
+  dormant
+  actif
+}
+
+enum StatutCommission {
+  due
+  facturee
+  payee
+}
+
+enum StatutSession {
+  active
+  expiree
+  revoquee
+}
+
+' ========== DOMAINE : IDENTITÉ ==========
+package "Domaine — Identité & profil" #E8F5F0 {
+
+  class TravailleurInformel {
+    + id : Identifiant
+    + telephone : Telephone {unique}
+    + codeSecret : SecretPIN
+    + nomAffiche : Texte
+    + genre : Genre [0..1]
+    + statutCompte : StatutCompte
+    + onboardingTermine : Boolean
+    + dateCreation : DateHeure
+    + dateDerniereConnexion : DateHeure [0..1]
+    --
+    + peutDemanderCredit() : Boolean
+    + activerCompte()
+    + suspendreCompte()
+  }
+
+  class ProfilActivite {
+    + metier : Metier
+    + ancienneteActivite : TrancheOrdinale
+    + caJournalierEstime : TrancheOrdinale
+    + participationTontine : Boolean
+    + cotisationTontine : MontantFcfa [0..1]
+    + usageMobileMoney : TrancheOrdinale
+    + statutCompteBancaire : StatutCompteBancaire
+    + ville : Texte
+    + zone : Texte [0..1]
+    + dateMiseAJour : DateHeure
+    --
+    + estComplet() : Boolean
+  }
+
+  class PreferencesUtilisateur {
+    + langue : Langue
+    + modeIconographique : Boolean
+    + assistanceVocaleActive : Boolean
+    + fuseau : Texte
+  }
+
+  class Consentement {
+    + id : Identifiant
+    + type : TypeConsentement
+    + accorde : Boolean
+    + dateDecision : DateHeure
+    + versionPolitique : Texte
+    + retractable : Boolean
+    --
+    + autorisePartageImf() : Boolean
+    + revoquer()
+  }
+
+  class AgentTerrain {
+    + id : Identifiant
+    + nom : Texte
+    + zoneIntervention : Texte
+    + actif : Boolean
+  }
+}
+
+' ========== DOMAINE : CAHIER ==========
+package "Domaine — Cahier numérique" #F7FBF9 {
+
+  class ClientInformel {
+    + id : Identifiant
+    + nom : Texte
+    + telephone : Telephone [0..1]
+    + note : Texte [0..1]
+  }
+
+  class Operation {
+    + id : Identifiant
+    + type : TypeOperation
+    + montantFcfa : MontantFcfa {> 0}
+    + libelle : Texte [0..1]
+    + dateOperation : DateHeure
+    + statutSync : StatutSync
+    + identifiantIdempotence : Identifiant [0..1]
+    + natureStock : NatureStock [0..1]
+    + categorieDepense : Texte [0..1]
+    + echeance : DateHeure [0..1]
+    + dateReglement : DateHeure [0..1]
+    + statutCreance : StatutCreance [0..1]
+    --
+    + estEnRetard() : Boolean
+    + reglerCreance()
+    + estValide() : Boolean
+  }
+
+  class OperationHorsLigne {
+    + identifiantLocal : Identifiant {unique}
+    + dateSaisieLocale : DateHeure
+    + etat : EtatOperationHorsLigne
+    + motifRejet : Texte [0..1]
+    --
+    + marquerAcceptee()
+    + marquerRejetee(motif)
+  }
+
+  note bottom of Operation
+    HER-01b — pas d'héritage.
+    Contraintes :
+    • creance ⇒ client 1 et statutCreance défini
+    • stock ⇒ natureStock défini
+    • en_retard = ouverte ∧ échéance < maintenant
+  end note
+}
+
+' ========== DOMAINE : SCORE & CRÉDIT ==========
+package "Domaine — Solvabilité & crédit" #EEF6F3 {
+
+  class NeoScore {
+    + valeur : Integer {0..100}
+    + seuilEligibilite : Integer
+    + eligible : Boolean {dérivé}
+    + segment : SegmentNeoScore
+    + dateCalcul : DateHeure
+    + periodeAnalyse : Periode
+    --
+    + estEligible() : Boolean
+    + estObsolete() : Boolean
+    + recalculer()
+  }
+
+  class CriteresScore {
+    + regularite : Integer {0..100}
+    + volume : Integer {0..100}
+    + gestionCreances : Integer {0..100}
+    + croissance : Integer {0..100}
+  }
+
+  class HistoriqueScore {
+    + periode : Texte
+    + valeur : Integer
+  }
+
+  class SnapshotScore {
+    + valeur : Integer {0..100}
+    + dateFigee : DateHeure
+    + segment : SegmentNeoScore
+  }
+
+  class OffreCredit {
+    + montantMinFcfa : MontantFcfa
+    + montantMaxFcfa : MontantFcfa
+    + montantSuggereFcfa : MontantFcfa
+    + dureeMois : Integer
+    + tauxMensuelIndicatif : Pourcentage
+    + eligible : Boolean
+    + dateGeneration : DateHeure
+    + validite : Duree [0..1]
+    --
+    + contient(montant) : Boolean
+  }
+
+  class DemandeCredit {
+    + id : Identifiant
+    + reference : ReferenceMetier {unique}
+    + montantDemandeFcfa : MontantFcfa
+    + usage : UsageCredit
+    + modaliteRemboursement : ModaliteRemboursement
+    + statut : StatutDemandeCredit
+    + dateSoumission : DateHeure [0..1]
+    + dateMiseAJour : DateHeure
+    + motifDecision : Texte [0..1]
+    --
+    + soumettre()
+    + peutEtreSoumise() : Boolean
+    + changerStatut(nouveau)
+  }
+
+  class InstitutionMicrofinance {
+    + id : Identifiant
+    + raisonSociale : Texte
+    + pays : Texte
+    + statutPartenariat : StatutPartenariat
+    + niveauAcces : NiveauAccesImf
+    --
+    + peutConsulterProfils() : Boolean
+  }
+
+  class AccesProfilImf {
+    + id : Identifiant
+    + dateAcces : DateHeure
+    + finalite : Texte
+    + anonymise : Boolean
+    + scorePresente : Integer
+    --
+    + estAutorise() : Boolean
+  }
+
+  class Commission {
+    + id : Identifiant
+    + montantCreditFcfa : MontantFcfa
+    + tauxCommission : Pourcentage
+    + montantCommissionFcfa : MontantFcfa
+    + statut : StatutCommission
+  }
+
+  note bottom of SnapshotScore
+    Remplace la dépendance vivante
+    Demande → NeoScore courant.
+    scoreAuDepot est **immuable**
+    après soumission (RM-DC04).
+  end note
+
+  note bottom of DemandeCredit
+    Transitions ordonnées (RM-DC05) :
+    brouillon → soumise → en_etude
+    → approuvee|refusee → (decaisee)
+  end note
+}
+
+' ========== APPLICATION : MFA ==========
+package "Application — Accès (hors agrégats métier purs)" #FFF8E7 {
+
+  class DefiOTP {
+    + id : Identifiant
+    + telephone : Telephone
+    + expireA : DateHeure
+    + consomme : Boolean
+    + tentatives : Integer
+    --
+    + estValide() : Boolean
+    + consommer()
+  }
+
+  class SessionAuthentifiee {
+    + id : Identifiant
+    + jetonMetier : Texte
+    + statut : StatutSession
+    + creeeA : DateHeure
+    + expireA : DateHeure
+    --
+    + estActive() : Boolean
+    + revoquer()
+  }
+}
+
+' ========== RELATIONS DOMAINE ==========
+TravailleurInformel "1" *-- "0..1" ProfilActivite : possede
+TravailleurInformel "1" *-- "0..1" PreferencesUtilisateur : possede
+TravailleurInformel "1" *-- "0..*" Consentement : declare
+TravailleurInformel "1" *-- "0..*" ClientInformel : possede
+TravailleurInformel "1" *-- "0..*" Operation : enregistre
+TravailleurInformel "1" *-- "0..*" OperationHorsLigne : file_locale
+TravailleurInformel "1" *-- "0..1" NeoScore : scoreCourant
+TravailleurInformel "1" --> "0..*" DemandeCredit : soumet
+TravailleurInformel "1" --> "0..*" OffreCredit : recoit
+TravailleurInformel "0..*" --> "0..1" AgentTerrain : est_accompagne_par
+
+TravailleurInformel --> StatutCompte
+Consentement --> TypeConsentement
+note on link
+  unicité (travailleur, type)
+end note
+
+ClientInformel "0..1" <-- "0..*" Operation : concerne
+note on link
+  obligatoire si type = creance
+end note
+
+Operation --> TypeOperation
+Operation --> StatutSync
+Operation --> StatutCreance
+Operation --> NatureStock
+
+OperationHorsLigne "0..*" --> "0..1" Operation : devient_apres_acceptation
+OperationHorsLigne --> EtatOperationHorsLigne
+
+NeoScore "1" *-- "1" CriteresScore : detaille
+NeoScore "1" *-- "0..*" HistoriqueScore : historique
+NeoScore --> SegmentNeoScore
+NeoScore "1" --> "0..*" OffreCredit : conditionne
+
+OffreCredit "1" <-- "0..*" DemandeCredit : s_appuie_sur
+note on link
+  obligatoire si statut ≥ soumise
+end note
+
+DemandeCredit "1" *-- "0..1" SnapshotScore : scoreAuDepot
+DemandeCredit --> StatutDemandeCredit
+DemandeCredit --> UsageCredit
+DemandeCredit --> ModaliteRemboursement
+DemandeCredit "0..*" --> "0..1" InstitutionMicrofinance : est_orientee_vers
+
+InstitutionMicrofinance --> StatutPartenariat
+InstitutionMicrofinance --> NiveauAccesImf
+InstitutionMicrofinance "1" --> "0..*" AccesProfilImf : effectue
+
+AccesProfilImf "0..*" --> "1" TravailleurInformel : cible
+AccesProfilImf "0..*" --> "1" Consentement : autorise_par
+AccesProfilImf "0..*" --> "0..1" DemandeCredit : demandeLiee
+
+DemandeCredit "1" --> "0..1" Commission : genere
+Commission --> StatutCommission
+Commission "0..*" --> "1" InstitutionMicrofinance : facturee_a
+
+' Application MFA
+SessionAuthentifiee "0..*" --> "1" TravailleurInformel : authentifie
+DefiOTP ..> TravailleurInformel : cible telephone
+SessionAuthentifiee --> StatutSession
+
+note top of TravailleurInformel
+  RM-T01 téléphone unique
+  peutDemanderCredit =
+  actif ∧ onboardingTermine
+  ∧ ¬suspendu
+end note
+
+note top of NeoScore
+  eligible ⇔ valeur ≥ seuilEligibilite
+end note
+
+@enduml

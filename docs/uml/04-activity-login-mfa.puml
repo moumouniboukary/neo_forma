@@ -1,0 +1,115 @@
+@startuml NeoForma_Activite_Login_MFA
+!theme plain
+skinparam shadowing false
+skinparam ActivityBackgroundColor #FEFEFE
+skinparam ActivityBorderColor #1D9E75
+skinparam ActivityDiamondBackgroundColor #E1F5EE
+title NeoForma — Activité Login MFA (corrigée)\nAlignée avec la séquence
+
+start
+
+:Ouvrir l'écran de connexion;
+:Saisir le numéro de téléphone;
+
+if (Format téléphone valide ?) then (non)
+  :Afficher erreur de format;
+  stop
+else (oui)
+endif
+
+:Soumettre la demande de login MFA;
+:Rechercher le compte par téléphone;
+
+if (Compte trouvé ?) then (non)
+  :Afficher « compte inexistant »;
+  stop
+elseif (Statut = brouillon ?) then (oui)
+  :Afficher « finaliser l'activation »;
+  stop
+elseif (Statut = suspendu ?) then (oui)
+  :Afficher « compte suspendu »;
+  stop
+else (actif)
+endif
+
+partition "Facteur 1 — OTP (possession)" {
+  :Créer un défi OTP;
+  :Demander l'envoi SMS;
+
+  if (Envoi SMS réussi ?) then (non)
+    :Afficher « SMS impossible,\nréessayer plus tard »;
+    stop
+  else (oui)
+  endif
+
+  :Afficher l'écran de saisie OTP;
+
+  repeat
+    :Saisir le code OTP;
+    :Valider le défi OTP;
+
+    if (OTP déjà consommé ?) then (oui)
+      :Afficher « code déjà utilisé »;
+    elseif (OTP valide et non expiré ?) then (oui)
+      :Consommer le défi OTP;
+      break
+    else (invalide / expiré)
+      :Afficher erreur OTP;
+      if (Renvoi autorisé ?) then (oui)
+        :Créer un nouveau défi OTP;
+        :Renvoyer le SMS;
+      else (non)
+        :Verrouiller temporairement\nou abandonner;
+        stop
+      endif
+    endif
+  repeat while (nouvelle tentative OTP ?) is (oui)
+}
+
+partition "Facteur 2 — PIN (connaissance)" {
+  :Afficher l'écran de saisie PIN;
+
+  repeat
+    :Saisir le PIN;
+    :Comparer au secret du compte;
+
+    if (PIN correct ?) then (oui)
+      break
+    else (non)
+      :Incrémenter les tentatives PIN;
+      if (Seuil de tentatives atteint ?) then (oui)
+        :Suspendre temporairement l'accès;
+        :Afficher accès bloqué;
+        stop
+      else (non)
+        :Afficher « PIN incorrect »;
+      endif
+    endif
+  repeat while (nouvelle tentative PIN ?) is (oui)
+}
+
+:Ouvrir une session authentifiée;
+:Enregistrer la date de dernière connexion;
+
+if (Onboarding terminé ?) then (non)
+  :Rediriger vers complétion du profil;
+else (oui)
+  :Rediriger vers le tableau de bord;
+endif
+
+stop
+
+legend right
+  MFA NeoForma (corrigé)
+  ----
+  Compte : actif uniquement
+  1. OTP SMS = possession
+  2. PIN = connaissance
+  ----
+  Aligné avec 03-sequence-login-mfa.puml
+  : échec SMS, renvoi OTP,
+  OTP consommé, boucle PIN,
+  seuil de tentatives.
+endlegend
+
+@enduml

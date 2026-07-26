@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">NeoForma</string>
+    <string name="title_activity_main">NeoForma</string>
+    <string name="package_name">bf.neoforma.app</string>
+    <string name="custom_url_scheme">bf.neoforma.app</string>
+</resources>

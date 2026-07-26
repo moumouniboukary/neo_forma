@@ -1,0 +1,59 @@
+# Render Blueprint — API NeoForma + Postgres + Redis.
+# https://render.com → New → Blueprint → pointer sur ce repo.
+databases:
+  - name: neoforma-db
+    databaseName: neoforma
+    user: neoforma
+    plan: free
+
+services:
+  - type: redis
+    name: neoforma-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+    # Accès interne uniquement (API sur le même compte Render).
+    ipAllowList: []
+
+  - type: web
+    name: neoforma-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerTarget: api
+    healthCheckPath: /ready
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: neoforma-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          name: neoforma-redis
+          type: redis
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3001"
+      - key: HOST
+        value: 0.0.0.0
+      # À renseigner dans le dashboard Render :
+      - key: CORS_ORIGIN
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_FROM
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: ALERT_WEBHOOK_URL
+        sync: false
+      - key: PARTNER_API_KEY
+        sync: false
+      - key: KOBO_API_KEY
+        sync: false

@@ -1,0 +1,26 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: neoforma-postgres
+    environment:
+      POSTGRES_USER: neoforma
+      POSTGRES_PASSWORD: neoforma
+      POSTGRES_DB: neoforma
+    ports:
+      - "5433:5432"
+    volumes:
+      - neoforma_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U neoforma -d neoforma"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: neoforma-redis
+    ports:
+      - "6379:6379"
+
+volumes:
+  neoforma_pg:

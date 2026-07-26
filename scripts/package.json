@@ -1,0 +1,21 @@
+{
+  "name": "scripts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@hpcc-js/wasm-zstd": "^1.13.4",
+    "@mongodb-js/zstd": "^7.0.0",
+    "fzstd": "^0.1.1",
+    "openfig-core": "^0.3.7",
+    "sharp": "^0.35.3",
+    "zstd-codec": "^0.1.5"
+  }
+}

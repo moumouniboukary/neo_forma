@@ -1,0 +1,796 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeoForma — Maquette App</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:       #0A1A13;
+    --surface:  #0F3D2E;
+    --card:     #1a4d38;
+    --card2:    #0F2D22;
+    --green:    #1D9E75;
+    --green-lt: #5DCAA5;
+    --green-xs: #9FE1CB;
+    --text:     #E1F5EE;
+    --muted:    #9FE1CB;
+    --dim:      #5DCAA5;
+    --border:   #1D4D38;
+    --phone-w:  220px;
+    --phone-h:  440px;
+    --r:        22px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    font-family: 'DM Sans', sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 24px 60px;
+  }
+
+  /* ── Header ── */
+  .page-header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .page-header .logo-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .logo-icon {
+    width: 40px; height: 40px;
+    background: var(--green);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-icon svg { width: 22px; height: 22px; }
+  .page-header h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--green-xs);
+    letter-spacing: -0.5px;
+  }
+  .page-header p {
+    font-size: 13px;
+    color: var(--dim);
+    margin-top: 4px;
+  }
+  .tag {
+    display: inline-block;
+    background: #1a4d38;
+    border: 1px solid var(--green);
+    border-radius: 20px;
+    padding: 4px 14px;
+    font-size: 11px;
+    color: var(--green-lt);
+    margin-top: 10px;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ── Screens grid ── */
+  .screens {
+    display: flex;
+    gap: 28px;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .screen-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    animation: fadeUp 0.6s ease both;
+  }
+  .screen-col:nth-child(1) { animation-delay: 0.05s; }
+  .screen-col:nth-child(2) { animation-delay: 0.15s; }
+  .screen-col:nth-child(3) { animation-delay: 0.25s; }
+  .screen-col:nth-child(4) { animation-delay: 0.35s; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .screen-name {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-family: 'Space Mono', monospace;
+  }
+
+  /* ── Phone shell ── */
+  .phone {
+    width: var(--phone-w);
+    height: var(--phone-h);
+    background: var(--surface);
+    border-radius: var(--r);
+    border: 2px solid var(--border);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .notch {
+    width: 35%; height: 9px;
+    background: #060F0A;
+    border-radius: 0 0 8px 8px;
+    margin: 0 auto;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+  }
+
+  /* ── Shared components ── */
+  .s-hdr {
+    background: var(--card2);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-shrink: 0;
+  }
+  .s-hdr-title { font-size: 12px; font-weight: 600; color: var(--green-xs); }
+
+  .s-body {
+    flex: 1;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+  }
+
+  .s-card {
+    background: var(--card);
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+
+  .lbl-xs { font-size: 7px; color: var(--dim); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 3px; }
+
+  .val-lg { font-size: 13px; font-weight: 600; color: var(--green-xs); }
+  .val-sub { font-size: 7px; color: var(--dim); }
+
+  .btn-primary {
+    background: var(--green);
+    border-radius: 8px;
+    padding: 9px;
+    text-align: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-outline {
+    border: 1.5px solid var(--green);
+    border-radius: 8px;
+    padding: 8px;
+    text-align: center;
+    font-size: 10px;
+    color: var(--green-lt);
+    cursor: pointer;
+  }
+
+  .back-btn { width: 14px; height: 14px; cursor: pointer; }
+
+  /* ── Screen 1: Login ── */
+  .s1-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 12px 12px;
+    gap: 9px;
+  }
+  .s1-logo {
+    width: 48px; height: 48px;
+    background: var(--green);
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 8px 24px rgba(29,158,117,0.35);
+  }
+  .s1-logo svg { width: 26px; height: 26px; }
+  .s1-title { font-family: 'Space Mono', monospace; font-size: 17px; font-weight: 700; color: var(--green-xs); }
+  .s1-sub { font-size: 9px; color: var(--dim); text-align: center; line-height: 1.5; }
+
+  .lang-row { display: flex; gap: 7px; }
+  .lang-pill {
+    padding: 3px 9px;
+    border-radius: 20px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--green-xs);
+    font-family: 'Space Mono', monospace;
+  }
+  .lang-pill.active { background: var(--green); border-color: var(--green); color: var(--text); }
+
+  .input-field {
+    width: 100%;
+    background: var(--card);
+    border-radius: 8px;
+    padding: 8px 10px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid transparent;
+  }
+  .input-field.focused { border-color: var(--green); }
+  .input-field svg { width: 12px; height: 12px; flex-shrink: 0; }
+  .input-field span { font-size: 9px; color: var(--dim); }
+  .input-field .cursor { width: 1px; height: 11px; background: var(--green); margin-left: 2px; animation: blink 1s infinite; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  .divider { width: 100%; height: 1px; background: var(--border); }
+
+  .vocal-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .vocal-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.8)} }
+
+  /* ── Screen 2: Vente ── */
+  .type-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 5px;
+  }
+  .type-card {
+    background: var(--card2);
+    border-radius: 8px;
+    padding: 7px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    border: 1.5px solid transparent;
+  }
+  .type-card.active {
+    background: rgba(29,158,117,0.15);
+    border-color: var(--green);
+  }
+  .type-card svg { width: 16px; height: 16px; }
+  .type-card span { font-size: 7px; color: var(--muted); text-align: center; }
+  .type-card.active span { color: var(--green-lt); }
+
+  .amount-display {
+    background: var(--card2);
+    border-radius: 10px;
+    padding: 10px 12px;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    border: 1px solid var(--border);
+  }
+  .amount-val { font-family: 'Space Mono', monospace; font-size: 20px; font-weight: 700; color: var(--green-xs); }
+  .amount-unit { font-size: 9px; color: var(--dim); }
+
+  .keypad {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 4px;
+  }
+  .key {
+    background: var(--card);
+    border-radius: 7px;
+    padding: 7px 4px;
+    text-align: center;
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--green-xs);
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .key:hover { background: var(--green); }
+  .key.span2 { grid-column: span 2; }
+  .key.del { background: var(--card2); color: var(--green-lt); font-size: 11px; }
+
+  /* ── Screen 3: Dashboard ── */
+  .dash-hdr {
+    background: var(--card2);
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .dash-greeting { font-size: 8px; color: var(--dim); }
+  .dash-name { font-size: 12px; font-weight: 600; color: var(--green-xs); }
+  .avatar {
+    width: 28px; height: 28px;
+    border-radius: 50%;
+    background: var(--green);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700; color: var(--text);
+    font-family: 'Space Mono', monospace;
+  }
+
+  .stat-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+
+  .bar-chart { display: flex; align-items: flex-end; gap: 3px; height: 40px; }
+  .bar-col { display: flex; flex-direction: column; align-items: center; gap: 2px; flex: 1; }
+  .bar { width: 100%; border-radius: 3px 3px 0 0; min-height: 4px; background: var(--green); }
+  .bar.dim { background: #0F6E56; }
+  .bar-day { font-size: 6px; color: var(--dim); font-family: 'Space Mono', monospace; }
+
+  .tx-list { display: flex; flex-direction: column; gap: 0; }
+  .tx-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 0;
+    border-bottom: 1px solid var(--card2);
+  }
+  .tx-row:last-child { border: none; }
+  .tx-ico {
+    width: 18px; height: 18px;
+    border-radius: 5px;
+    background: var(--card2);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .tx-ico svg { width: 10px; height: 10px; }
+  .tx-name { font-size: 8px; color: var(--green-xs); }
+  .tx-time { font-size: 7px; color: var(--dim); }
+  .tx-amt { font-size: 9px; font-weight: 600; color: var(--green); margin-left: auto; font-family: 'Space Mono', monospace; }
+  .tx-amt.neg { color: #5DCAA5; opacity: .7; }
+
+  .bottom-nav {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    background: var(--card2);
+    padding: 6px 0 8px;
+    flex-shrink: 0;
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+  }
+  .nav-item svg { width: 14px; height: 14px; }
+  .nav-item span { font-size: 7px; color: var(--dim); }
+  .nav-item.active span { color: var(--green); }
+  .nav-dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: var(--green);
+  }
+
+  /* ── Screen 4: NeoScore ── */
+  .score-card {
+    background: var(--card2);
+    border-radius: 12px;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid rgba(29,158,117,0.3);
+  }
+  .ring-wrap {
+    position: relative;
+    width: 70px; height: 70px;
+  }
+  .ring-wrap svg { width: 70px; height: 70px; }
+  .ring-num {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--green-xs);
+  }
+  .score-lbl { font-size: 8px; color: var(--dim); }
+  .score-badge {
+    background: rgba(29,158,117,0.2);
+    border: 1px solid var(--green);
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 9px;
+    color: var(--green-lt);
+    font-weight: 600;
+  }
+
+  .criteria { display: flex; flex-direction: column; gap: 5px; }
+  .crit-row { display: flex; flex-direction: column; gap: 3px; }
+  .crit-top { display: flex; justify-content: space-between; align-items: center; }
+  .crit-name { font-size: 8px; color: var(--muted); }
+  .crit-pct { font-size: 8px; color: var(--green); font-weight: 600; font-family: 'Space Mono', monospace; }
+  .prog-bg { width: 100%; height: 4px; background: var(--card2); border-radius: 2px; }
+  .prog-fill { height: 4px; background: var(--green); border-radius: 2px; }
+
+  .hist-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+  }
+  .hist-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+  .hist-dot.old { background: #0F6E56; }
+  .hist-label { flex: 1; font-size: 7px; color: var(--muted); }
+  .hist-val { font-size: 8px; color: var(--dim); font-family: 'Space Mono', monospace; }
+
+  /* ── Color palette reference ── */
+  .palette {
+    margin-top: 48px;
+    text-align: center;
+  }
+  .palette h3 {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .swatches {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .swatch {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+  .sw-box {
+    width: 40px; height: 40px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .sw-code { font-size: 8px; color: var(--dim); font-family: 'Space Mono', monospace; }
+  .sw-name { font-size: 7px; color: #5DCAA5; }
+</style>
+</head>
+<body>
+
+<!-- ── Page Header ── -->
+<div class="page-header">
+  <div class="logo-row">
+    <div class="logo-icon">
+      <svg viewBox="0 0 22 22" fill="none">
+        <path d="M11 2L2 7v8l9 5 9-5V7L11 2z" stroke="#E1F5EE" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M11 2v13M2 7l9 5 9-5" stroke="#E1F5EE" stroke-width="1.6"/>
+      </svg>
+    </div>
+    <h1>NeoForma</h1>
+  </div>
+  <p>Infrastructure numérique d'inclusion financière — Secteur informel africain</p>
+  <div class="tag">Maquette App · POESAM 2026</div>
+</div>
+
+<!-- ── 4 Screens ── -->
+<div class="screens">
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 1 : Login / Accueil
+  ════════════════════════════════════════════ -->
+  <div class="screen-col">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="s1-body">
+        <div class="s1-logo">
+          <svg viewBox="0 0 26 26" fill="none">
+            <path d="M13 2L2 8v10l11 6 11-6V8L13 2z" stroke="#E1F5EE" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M13 2v15M2 8l11 6 11-6" stroke="#E1F5EE" stroke-width="1.8"/>
+          </svg>
+        </div>
+        <div class="s1-title">NeoForma</div>
+        <div class="s1-sub">Ton cahier numérique,<br>ton passeport financier</div>
+
+        <div class="lang-row">
+          <div class="lang-pill active">FR</div>
+          <div class="lang-pill">MR</div>
+          <div class="lang-pill">DL</div>
+          <div class="lang-pill">FF</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="input-field focused" style="width:100%">
+          <svg viewBox="0 0 12 12" fill="none">
+            <rect x="1" y="3" width="10" height="7.5" rx="1" stroke="#5DCAA5" stroke-width="1"/>
+            <path d="M3.5 3V2.5A2.5 2.5 0 018.5 2.5V3" stroke="#5DCAA5" stroke-width="1"/>
+          </svg>
+          <span style="color:#9FE1CB">+226 70 00 00 00</span>
+          <div class="cursor"></div>
+        </div>
+        <div class="input-field" style="width:100%">
+          <svg viewBox="0 0 12 12" fill="none">
+            <circle cx="6" cy="5" r="2" stroke="#5DCAA5" stroke-width="1"/>
+            <path d="M2 11c0-2.2 1.8-4 4-4s4 1.8 4 4" stroke="#5DCAA5" stroke-width="1"/>
+          </svg>
+          <span>● ● ● ●</span>
+        </div>
+
+        <div class="btn-primary" style="width:100%">Se connecter</div>
+        <div class="btn-outline" style="width:100%">Créer un compte</div>
+
+        <div class="vocal-row">
+          <div class="vocal-dot"></div>
+          <span style="font-size:8px;color:var(--dim)">Interface vocale disponible</span>
+        </div>
+      </div>
+    </div>
+    <div class="screen-name">01 · Accueil</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 2 : Enregistrer une vente
+  ════════════════════════════════════════════ -->
+  <div class="screen-col">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="s-hdr">
+        <svg class="back-btn" viewBox="0 0 14 14" fill="none">
+          <path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="s-hdr-title">Enregistrer</div>
+      </div>
+      <div class="s-body">
+        <div class="lbl-xs">Type d'opération</div>
+        <div class="type-grid">
+          <div class="type-card active">
+            <svg viewBox="0 0 16 16" fill="none">
+              <rect x="2" y="5" width="12" height="8.5" rx="1" stroke="#1D9E75" stroke-width="1.2"/>
+              <path d="M5 5V4A3 3 0 0111 4v1" stroke="#1D9E75" stroke-width="1.2"/>
+              <path d="M6 9h4" stroke="#1D9E75" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            <span>Vente</span>
+          </div>
+          <div class="type-card">
+            <svg viewBox="0 0 16 16" fill="none">
+              <path d="M3 13.5L5 5h6l2 8.5H3z" stroke="#5DCAA5" stroke-width="1.2"/>
+              <path d="M6 5V4a2 2 0 014 0v1" stroke="#5DCAA5" stroke-width="1.2"/>
+            </svg>
+            <span>Stock</span>
+          </div>
+          <div class="type-card">
+            <svg viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="5.5" stroke="#5DCAA5" stroke-width="1.2"/>
+              <path d="M8 5.5V8l2 1.5" stroke="#5DCAA5" stroke-width="1.2" stroke-linecap="round"/>
+            </svg>
+            <span>Dette</span>
+          </div>
+        </div>
+
+        <div class="amount-display">
+          <span style="font-size:9px;color:var(--dim)">Montant</span>
+          <span class="amount-val">2 500</span>
+          <span class="amount-unit">FCFA</span>
+        </div>
+
+        <div class="keypad">
+          <div class="key">1</div><div class="key">2</div><div class="key">3</div>
+          <div class="key">4</div><div class="key">5</div><div class="key">6</div>
+          <div class="key">7</div><div class="key">8</div><div class="key">9</div>
+          <div class="key span2">0 0 0</div><div class="key del">⌫</div>
+        </div>
+
+        <div class="btn-primary" style="display:flex;align-items:center;justify-content:center;gap:6px">
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <path d="M2 6.5l3 3 6-5.5" stroke="#E1F5EE" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          Confirmer la vente
+        </div>
+      </div>
+    </div>
+    <div class="screen-name">02 · Enregistrer</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 3 : Tableau de bord
+  ════════════════════════════════════════════ -->
+  <div class="screen-col">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="dash-hdr">
+        <div>
+          <div class="dash-greeting">Bonjour,</div>
+          <div class="dash-name">Aminata K.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 2a2.5 2.5 0 010 5A2.5 2.5 0 018 2z" stroke="#5DCAA5" stroke-width="1"/>
+            <path d="M2 14c0-3.3 2.7-6 6-6s6 2.7 6 6" stroke="#5DCAA5" stroke-width="1"/>
+          </svg>
+          <div class="avatar">AK</div>
+        </div>
+      </div>
+      <div class="s-body">
+        <div class="stat-row">
+          <div class="s-card">
+            <div class="lbl-xs">Ce mois</div>
+            <div class="val-lg">147 500</div>
+            <div class="val-sub">FCFA de ventes</div>
+          </div>
+          <div class="s-card">
+            <div class="lbl-xs">Créances</div>
+            <div class="val-lg" style="color:#9FE1CB">23 000</div>
+            <div class="val-sub">FCFA à récupérer</div>
+          </div>
+        </div>
+
+        <div class="s-card">
+          <div class="lbl-xs" style="margin-bottom:8px">Ventes · 7 derniers jours</div>
+          <div class="bar-chart">
+            <div class="bar-col"><div class="bar dim" style="height:22px"></div><div class="bar-day">L</div></div>
+            <div class="bar-col"><div class="bar dim" style="height:30px"></div><div class="bar-day">M</div></div>
+            <div class="bar-col"><div class="bar dim" style="height:17px"></div><div class="bar-day">M</div></div>
+            <div class="bar-col"><div class="bar" style="height:36px"></div><div class="bar-day">J</div></div>
+            <div class="bar-col"><div class="bar dim" style="height:26px"></div><div class="bar-day">V</div></div>
+            <div class="bar-col"><div class="bar" style="height:40px"></div><div class="bar-day">S</div></div>
+            <div class="bar-col"><div class="bar" style="height:31px"></div><div class="bar-day">D</div></div>
+          </div>
+        </div>
+
+        <div class="s-card">
+          <div class="lbl-xs" style="margin-bottom:5px">Dernières opérations</div>
+          <div class="tx-list">
+            <div class="tx-row">
+              <div class="tx-ico">
+                <svg viewBox="0 0 10 10" fill="none"><rect x="1" y="3" width="8" height="6" rx=".8" stroke="#9FE1CB" stroke-width=".9"/><path d="M3.5 3v-.5A1.5 1.5 0 016.5 2.5V3" stroke="#9FE1CB" stroke-width=".9"/></svg>
+              </div>
+              <div>
+                <div class="tx-name">Vente savon</div>
+                <div class="tx-time">Auj. · 09:14</div>
+              </div>
+              <div class="tx-amt">+1 500</div>
+            </div>
+            <div class="tx-row">
+              <div class="tx-ico">
+                <svg viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="3.5" stroke="#9FE1CB" stroke-width=".9"/><path d="M5 3.5V5l1 1" stroke="#9FE1CB" stroke-width=".9" stroke-linecap="round"/></svg>
+              </div>
+              <div>
+                <div class="tx-name">Dette · Koné</div>
+                <div class="tx-time">Hier · 16:30</div>
+              </div>
+              <div class="tx-amt neg">−5 000</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="bottom-nav">
+        <div class="nav-item active">
+          <svg viewBox="0 0 14 14" fill="none"><rect x="1" y="5.5" width="12" height="7" rx="1" stroke="#1D9E75" stroke-width="1"/><path d="M4 12.5v-3.5h6v3.5" stroke="#1D9E75" stroke-width="1"/><path d="M1 5.5L7 1l6 4.5" stroke="#1D9E75" stroke-width="1"/></svg>
+          <div class="nav-dot"></div>
+          <span style="color:var(--green)">Accueil</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 14 14" fill="none"><rect x="1" y="2" width="12" height="10" rx="1" stroke="#5DCAA5" stroke-width="1"/><path d="M4 2v10M1 6h12M1 10h12" stroke="#5DCAA5" stroke-width="1"/></svg>
+          <span>Ventes</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" stroke="#5DCAA5" stroke-width="1"/><path d="M7 5v2.5l1.5 1" stroke="#5DCAA5" stroke-width="1" stroke-linecap="round"/></svg>
+          <span>Dettes</span>
+        </div>
+        <div class="nav-item">
+          <svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="5" r="2.5" stroke="#5DCAA5" stroke-width="1"/><path d="M2 13c0-2.8 2.2-5 5-5s5 2.2 5 5" stroke="#5DCAA5" stroke-width="1"/></svg>
+          <span>Profil</span>
+        </div>
+      </div>
+    </div>
+    <div class="screen-name">03 · Tableau de bord</div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       SCREEN 4 : NeoScore
+  ════════════════════════════════════════════ -->
+  <div class="screen-col">
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="s-hdr">
+        <svg class="back-btn" viewBox="0 0 14 14" fill="none">
+          <path d="M9 3L5 7l4 4" stroke="#5DCAA5" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="s-hdr-title">NeoScore</div>
+        <div style="margin-left:auto;background:rgba(29,158,117,.15);border:1px solid var(--green);border-radius:20px;padding:2px 8px;font-size:7px;color:var(--green-lt);font-weight:600">LIVE</div>
+      </div>
+      <div class="s-body">
+        <div class="score-card">
+          <div class="ring-wrap">
+            <svg viewBox="0 0 70 70">
+              <circle cx="35" cy="35" r="28" fill="none" stroke="#1a4d38" stroke-width="7"/>
+              <circle cx="35" cy="35" r="28" fill="none" stroke="#1D9E75" stroke-width="7"
+                stroke-dasharray="131" stroke-dashoffset="33"
+                stroke-linecap="round"
+                transform="rotate(-90 35 35)"/>
+            </svg>
+            <div class="ring-num">76</div>
+          </div>
+          <div class="score-lbl">Score NeoScore · sur 100</div>
+          <div class="score-badge">✓ Profil fiable</div>
+        </div>
+
+        <div class="s-card">
+          <div class="lbl-xs" style="margin-bottom:7px">Détail du score</div>
+          <div class="criteria">
+            <div class="crit-row">
+              <div class="crit-top"><span class="crit-name">Régularité</span><span class="crit-pct">88%</span></div>
+              <div class="prog-bg"><div class="prog-fill" style="width:88%"></div></div>
+            </div>
+            <div class="crit-row">
+              <div class="crit-top"><span class="crit-name">Volume d'activité</span><span class="crit-pct">72%</span></div>
+              <div class="prog-bg"><div class="prog-fill" style="width:72%"></div></div>
+            </div>
+            <div class="crit-row">
+              <div class="crit-top"><span class="crit-name">Gestion des dettes</span><span class="crit-pct">65%</span></div>
+              <div class="prog-bg"><div class="prog-fill" style="width:65%"></div></div>
+            </div>
+            <div class="crit-row">
+              <div class="crit-top"><span class="crit-name">Croissance</span><span class="crit-pct">80%</span></div>
+              <div class="prog-bg"><div class="prog-fill" style="width:80%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="s-card">
+          <div class="lbl-xs" style="margin-bottom:5px">Évolution du score</div>
+          <div class="hist-item"><div class="hist-dot old"></div><span class="hist-label">Janvier 2026</span><span class="hist-val">58 / 100</span></div>
+          <div class="hist-item"><div class="hist-dot old"></div><span class="hist-label">Février 2026</span><span class="hist-val">67 / 100</span></div>
+          <div class="hist-item"><div class="hist-dot"></div><span class="hist-label">Mars 2026</span><span class="hist-val">76 / 100</span></div>
+        </div>
+
+        <div class="btn-primary" style="display:flex;align-items:center;justify-content:center;gap:6px;flex-shrink:0">
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+            <path d="M6 1v10M1 6h10" stroke="#E1F5EE" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          Demander un crédit
+        </div>
+      </div>
+    </div>
+    <div class="screen-name">04 · NeoScore</div>
+  </div>
+
+</div>
+
+<!-- ── Palette de référence Figma ── -->
+<div class="palette">
+  <h3>Palette de couleurs — Référence Figma</h3>
+  <div class="swatches">
+    <div class="swatch"><div class="sw-box" style="background:#0A1A13"></div><div class="sw-code">#0A1A13</div><div class="sw-name">Fond page</div></div>
+    <div class="swatch"><div class="sw-box" style="background:#0F3D2E"></div><div class="sw-code">#0F3D2E</div><div class="sw-name">Téléphone</div></div>
+    <div class="swatch"><div class="sw-box" style="background:#0A2A1F;border:1px solid #1D4D38"></div><div class="sw-code">#0A2A1F</div><div class="sw-name">Header/Nav</div></div>
+    <div class="swatch"><div class="sw-box" style="background:#1a4d38"></div><div class="sw-code">#1A4D38</div><div class="sw-name">Carte</div></div>
+    <div class="swatch"><div class="sw-box" style="background:#1D9E75"></div><div class="sw-code">#1D9E75</div><div class="sw-name">Vert principal</div></div>
+    <div class="swatch"><div class="sw-box" style="background:#5DCAA5"></div><div class="sw-code">#5DCAA5</div><div class="sw-name">Texte dim</div></div>
+    <div class="swatch"><div class="sw-box" style="background:#9FE1CB"></div><div class="sw-code">#9FE1CB</div><div class="sw-name">Texte principal</div></div>
+    <div class="swatch"><div class="sw-box" style="background:#E1F5EE"></div><div class="sw-code">#E1F5EE</div><div class="sw-name">Texte bouton</div></div>
+  </div>
+</div>
+
+</body>
+</html>

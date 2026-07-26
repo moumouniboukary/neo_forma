@@ -1,0 +1,134 @@
+@startuml NeoForma_Sequence_Login_MFA
+!theme plain
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+skinparam responseMessageBelowArrow true
+title NeoForma — Séquence Login MFA (corrigée)\nOTP + PIN — alignée avec l'activité
+
+actor "Travailleur\ninformel" as TI
+participant "Application\nNeoForma" as App
+participant "Service\nIdentité & Accès" as Auth
+participant "Répertoire\nTravailleurs" as Repo
+participant "Gestionnaire\nDéfis OTP" as Otp
+participant "Passerelle SMS" as SMS
+participant "Session\nAuthentifiée" as Sess
+
+== 0. Validation locale ==
+
+TI -> App : Saisir téléphone
+App -> App : validerFormat(telephone)
+alt Format invalide
+  App --> TI : Erreur de format
+else Format OK
+  TI -> App : Demander connexion MFA
+  App -> Auth : initierLogin(telephone)
+
+  == 1. Contrôle du compte ==
+
+  Auth -> Repo : trouverParTelephone(telephone)
+  alt Introuvable
+    Repo --> Auth : vide
+    Auth --> App : échec
+    App --> TI : Compte inexistant
+  else Statut = brouillon
+    Repo --> Auth : Travailleur (brouillon)
+    Auth --> App : échec
+    App --> TI : Finaliser l'activation du compte
+  else Statut = suspendu
+    Repo --> Auth : Travailleur (suspendu)
+    Auth --> App : échec
+    App --> TI : Compte suspendu
+  else Statut = actif
+    Repo --> Auth : TravailleurInformel actif
+
+    == 2. Facteur 1 — OTP (possession) ==
+
+    Auth -> Otp : creerDefi(telephone)
+    activate Otp
+    Otp -> Otp : générer code + expiration
+    Otp -> SMS : envoyerOTP(telephone, code)
+
+    alt Échec envoi SMS
+      SMS --> Otp : erreur canal
+      Otp --> Auth : envoiImpossible
+      deactivate Otp
+      Auth --> App : échec SMS
+      App --> TI : Impossible d'envoyer le SMS\n(réessayer plus tard)
+    else SMS accepté
+      SMS --> Otp : accepté
+      Otp --> Auth : defiCree(idDefi, expireA)
+      deactivate Otp
+      Auth --> App : attendreOTP(idDefi)
+      App --> TI : Saisir le code OTP
+
+      loop Jusqu'à succès OTP, max tentatives / renvois
+        TI -> App : Saisir OTP
+        App -> Auth : verifierOTP(idDefi, code)
+        Auth -> Otp : valider(idDefi, code)
+
+        alt OTP déjà consommé
+          Otp --> Auth : rejeté (consommé)
+          Auth --> App : échec
+          App --> TI : Code déjà utilisé — renvoyer un OTP
+        else OTP expiré / invalide
+          Otp --> Auth : rejeté
+          Auth --> App : échec
+          App --> TI : Code incorrect ou expiré
+          opt Renvoi autorisé
+            TI -> App : Renvoyer OTP
+            App -> Auth : renvoyerOTP(telephone)
+            Auth -> Otp : creerDefi(telephone)
+            Otp -> SMS : envoyerOTP(...)
+          end
+        else OTP valide
+          Otp --> Auth : consommé
+          Auth --> App : facteur1_ok
+
+          == 3. Facteur 2 — PIN (connaissance) ==
+
+          App --> TI : Demander le PIN
+          loop Jusqu'à PIN OK ou seuil atteint
+            TI -> App : Saisir PIN
+            App -> Auth : verifierPIN(telephone, pin)
+            Auth -> Repo : chargerIdentifiants(telephone)
+            Repo --> Auth : empreinte PIN
+            Auth -> Auth : comparer
+
+            alt PIN incorrect
+              Auth -> Auth : incrémenterTentativesPIN()
+              alt Seuil atteint
+                Auth -> Repo : suspendreTemporairement()
+                Auth --> App : verrouillé
+                App --> TI : Accès temporairement bloqué
+              else Sous le seuil
+                Auth --> App : échec PIN
+                App --> TI : PIN incorrect — réessayer
+              end
+            else PIN correct
+              Auth -> Sess : ouvrirSession(travailleur)
+              activate Sess
+              Sess --> Auth : SessionAuthentifiee
+              deactivate Sess
+              Auth -> Repo : enregistrerDerniereConnexion()
+              Auth --> App : succes(session, travailleur)
+
+              alt Onboarding non terminé
+                App --> TI : Rediriger vers profil d'activité
+              else Onboarding terminé
+                App --> TI : Rediriger vers tableau de bord
+              end
+            end
+          end
+        end
+      end
+    end
+  end
+end
+
+note over TI, SMS
+  MFA = OTP (possession) + PIN (connaissance).
+  Les deux facteurs doivent réussir.
+  Un défi OTP consommé n'est pas réutilisable.
+end note
+
+@enduml

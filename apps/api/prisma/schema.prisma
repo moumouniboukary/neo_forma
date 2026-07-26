@@ -1,0 +1,397 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Travailleur {
+  id                    String    @id @default(uuid())
+  telephone             String    @unique
+  pinHash               String
+  nomAffiche            String    @default("")
+  genre                 String?
+  statutCompte          String    @default("brouillon")
+  onboardingTermine     Boolean   @default(false)
+  dateDerniereConnexion DateTime?
+  /// Verrouillage temporaire PIN (OWASP / UML MFA)
+  pinFailCount          Int       @default(0)
+  pinLockedUntil        DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  profilActivite       ProfilActivite?
+  preferences          Preferences?
+  consentements        Consentement[]
+  clientsInformels     ClientInformel[]
+  operations           Operation[]
+  operationsHorsLigne  OperationHorsLigne[]
+  neoscore             NeoScore?
+  offresCredit         OffreCredit[]
+  demandesCredit       DemandeCredit[]
+  accesProfilsImf      AccesProfilImf[]
+  defisOtp             DefiOtp[]
+  sessions             Session[]
+
+  @@map("travailleurs")
+}
+
+model ProfilActivite {
+  id                   String   @id @default(uuid())
+  travailleurId        String   @unique
+  metier               String?
+  ancienneteActivite   String?
+  caJournalierEstime   String?
+  participationTontine Boolean?
+  cotisationTontine    Int?
+  usageMobileMoney     String?
+  statutCompteBancaire String?
+  ville                String?
+  zone                 String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  travailleur Travailleur @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+
+  @@map("profils_activite")
+}
+
+model Preferences {
+  id                     String   @id @default(uuid())
+  travailleurId          String   @unique
+  langue                 String   @default("fr")
+  modeIconographique     Boolean  @default(false)
+  assistanceVocaleActive Boolean  @default(false)
+  fuseau                 String   @default("Africa/Ouagadougou")
+  updatedAt              DateTime @updatedAt
+
+  travailleur Travailleur @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+
+  @@map("preferences")
+}
+
+model Consentement {
+  id               String   @id @default(uuid())
+  travailleurId    String
+  type             String
+  accorde          Boolean  @default(false)
+  dateDecision     DateTime @default(now())
+  versionPolitique String
+  retractable      Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  travailleur    Travailleur     @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+  accesProfilsImf AccesProfilImf[]
+
+  @@unique([travailleurId, type])
+  @@index([type, accorde])
+  @@map("consentements")
+}
+
+model ClientInformel {
+  id            String   @id @default(uuid())
+  travailleurId String
+  nom           String
+  telephone     String?
+  note          String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  travailleur Travailleur @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+  operations  Operation[]
+
+  @@index([travailleurId])
+  @@index([travailleurId, nom])
+  @@map("clients_informels")
+}
+
+model Operation {
+  id                     String    @id @default(uuid())
+  travailleurId          String
+  type                   String
+  montantFcfa            Int
+  libelle                String?
+  dateOperation          DateTime  @default(now())
+  statutSync             String    @default("synchronisee")
+  identifiantIdempotence String?   @unique
+  clientId               String?
+  natureStock            String?
+  categorieDepense       String?
+  /// especes | mobile_money
+  canal                  String?
+  echeance               DateTime?
+  dateReglement          DateTime?
+  statutCreance          String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  travailleur         Travailleur          @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+  client              ClientInformel?      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  operationsHorsLigne OperationHorsLigne[]
+
+  @@index([travailleurId, dateOperation])
+  @@index([travailleurId, type])
+  @@index([clientId])
+  @@map("operations")
+}
+
+/// File offline — module sync
+model OperationHorsLigne {
+  id                String   @id @default(uuid())
+  travailleurId     String
+  identifiantLocal  String   @unique
+  payload           String
+  dateSaisieLocale  DateTime
+  /// en_attente | acceptee | rejetee
+  etat              String   @default("en_attente")
+  motifRejet        String?
+  operationId       String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  travailleur Travailleur @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+  operation   Operation?  @relation(fields: [operationId], references: [id], onDelete: SetNull)
+
+  @@index([travailleurId, etat])
+  @@map("operations_hors_ligne")
+}
+
+/// Score courant — module scoring
+model NeoScore {
+  id                      String   @id @default(uuid())
+  travailleurId           String   @unique
+  valeur                  Int
+  seuilEligibilite        Int      @default(50)
+  eligible                Boolean
+  segment                 String
+  critereRegularite       Int
+  critereVolume           Int
+  critereGestionCreances  Int
+  critereCroissance       Int
+  periodeAnalyseJours     Int      @default(30)
+  dateCalcul              DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  travailleur Travailleur          @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+  historique  NeoScoreHistorique[]
+  offres      OffreCredit[]
+
+  @@map("neoscores")
+}
+
+model NeoScoreHistorique {
+  id           String   @id @default(uuid())
+  neoscoreId   String
+  periode      String
+  valeur       Int
+  enregistreAt DateTime @default(now())
+
+  neoscore NeoScore @relation(fields: [neoscoreId], references: [id], onDelete: Cascade)
+
+  @@index([neoscoreId, enregistreAt])
+  @@map("neoscore_historique")
+}
+
+model OffreCredit {
+  id                    String    @id @default(uuid())
+  travailleurId         String
+  neoscoreId            String
+  montantMinFcfa        Int
+  montantMaxFcfa        Int
+  montantSuggereFcfa    Int
+  dureeMois             Int
+  tauxMensuelIndicatif  Float
+  eligible              Boolean
+  dateGeneration        DateTime  @default(now())
+  valideJusqua          DateTime?
+  createdAt             DateTime  @default(now())
+
+  travailleur Travailleur    @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+  neoscore    NeoScore       @relation(fields: [neoscoreId], references: [id], onDelete: Restrict)
+  demandes    DemandeCredit[]
+
+  @@index([travailleurId, dateGeneration])
+  @@map("offres_credit")
+}
+
+model SnapshotScore {
+  id                     String   @id @default(uuid())
+  valeur                 Int
+  segment                String
+  seuilEligibilite       Int
+  critereRegularite      Int
+  critereVolume          Int
+  critereGestionCreances Int
+  critereCroissance      Int
+  dateFigee              DateTime @default(now())
+
+  demandes DemandeCredit[]
+
+  @@map("snapshots_score")
+}
+
+model Imf {
+  id                String   @id @default(uuid())
+  raisonSociale     String   @unique
+  pays              String   @default("Burkina Faso")
+  statutPartenariat String   @default("prospect")
+  niveauAcces       String   @default("consultation")
+  contactEmail      String?
+  contactNom        String?
+  /// Clé API partenaire (stockée en clair côté ops MVP — à hasher en prod).
+  apiKey            String?  @unique
+  /// Taux de commission NeoForma (ex. 0.02 = 2 %).
+  tauxCommission    Float    @default(0.02)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  demandes        DemandeCredit[]
+  accesProfilsImf AccesProfilImf[]
+  commissions     Commission[]
+
+  @@index([statutPartenariat])
+  @@map("imf")
+}
+
+model DemandeCredit {
+  id                     String    @id @default(uuid())
+  reference              String    @unique
+  travailleurId          String
+  offreId                String?
+  snapshotScoreId        String?
+  imfId                  String?
+  montantDemandeFcfa     Int
+  usage                  String
+  modaliteRemboursement  String
+  /// brouillon | soumise | en_examen | approuvee | refusee | decaissee
+  statut                 String    @default("brouillon")
+  dateSoumission         DateTime?
+  motifDecision          String?
+  createdAt              DateTime  @default(now())
+  updatedAt              DateTime  @updatedAt
+
+  travailleur   Travailleur    @relation(fields: [travailleurId], references: [id], onDelete: Restrict)
+  offre         OffreCredit?   @relation(fields: [offreId], references: [id], onDelete: Restrict)
+  snapshotScore SnapshotScore? @relation(fields: [snapshotScoreId], references: [id], onDelete: Restrict)
+  imf           Imf?           @relation(fields: [imfId], references: [id], onDelete: SetNull)
+  commission    Commission?
+  accesProfils  AccesProfilImf[]
+
+  @@index([travailleurId, createdAt])
+  @@index([statut])
+  @@map("demandes_credit")
+}
+
+model AccesProfilImf {
+  id              String   @id @default(uuid())
+  imfId           String
+  travailleurId   String
+  consentementId  String
+  demandeCreditId String?
+  dateAcces       DateTime @default(now())
+  finalite        String
+  anonymise       Boolean  @default(true)
+  scorePresente   Int
+
+  imf           Imf            @relation(fields: [imfId], references: [id], onDelete: Restrict)
+  travailleur   Travailleur    @relation(fields: [travailleurId], references: [id], onDelete: Restrict)
+  consentement  Consentement   @relation(fields: [consentementId], references: [id], onDelete: Restrict)
+  demandeCredit DemandeCredit? @relation(fields: [demandeCreditId], references: [id], onDelete: SetNull)
+
+  @@index([imfId, dateAcces])
+  @@index([travailleurId, dateAcces])
+  @@map("acces_profils_imf")
+}
+
+model Commission {
+  id                    String   @id @default(uuid())
+  demandeCreditId       String   @unique
+  imfId                 String
+  montantCreditFcfa     Int
+  tauxCommission        Float
+  montantCommissionFcfa Int
+  /// due | facturee | payee
+  statut                String   @default("due")
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  demande DemandeCredit @relation(fields: [demandeCreditId], references: [id], onDelete: Restrict)
+  imf     Imf           @relation(fields: [imfId], references: [id], onDelete: Restrict)
+
+  @@index([imfId, statut])
+  @@map("commissions")
+}
+
+model DefiOtp {
+  id            String   @id @default(uuid())
+  telephone     String
+  codeHash      String
+  /// register | login | reset
+  purpose       String   @default("login")
+  expireA       DateTime
+  consomme      Boolean  @default(false)
+  tentatives    Int      @default(0)
+  travailleurId String?
+  createdAt     DateTime @default(now())
+
+  travailleur Travailleur? @relation(fields: [travailleurId], references: [id], onDelete: SetNull)
+
+  @@index([telephone, createdAt])
+  @@index([telephone, purpose, consomme])
+  @@map("defis_otp")
+}
+
+model Session {
+  id               String    @id @default(uuid())
+  travailleurId    String
+  /// Hash SHA-256 du refresh token opaque (jamais stocké en clair)
+  refreshTokenHash String    @unique
+  /// Hash SHA-256 de l'access JWT (révocation logout)
+  accessTokenHash  String?   @unique
+  /// Famille de rotation — réutilisation d'un ancien refresh ⇒ révocation famille
+  familyId         String
+  statut           String    @default("active")
+  creeeA           DateTime  @default(now())
+  expireA          DateTime
+  revoqueeA        DateTime?
+  userAgent        String?
+  ip               String?
+
+  travailleur Travailleur @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+
+  @@index([travailleurId, statut])
+  @@index([familyId])
+  @@map("sessions")
+}
+
+/// Collecte terrain KoboCollect — alimente les profils / NeoScore (pilote).
+model KoboSubmission {
+  id                  String   @id @default(uuid())
+  /// _uuid KoboToolbox — idempotence des imports
+  submissionId        String   @unique
+  telephone           String?
+  metier              String?
+  ancienneteActivite  String?
+  caJournalierEstime  String?
+  participationTontine Boolean?
+  cotisationTontine   Int?
+  usageMobileMoney    String?
+  statutCompteBancaire String?
+  impayes             Int?
+  nbTransactions      Int?
+  interet             Int?
+  langue              String?
+  consentement        String?
+  /// Payload brut Kobo (audit / retraitement)
+  raw                 Json
+  /// Travailleur rattaché si le téléphone correspond à un compte
+  matchedTravailleurId String?
+  importedAt          DateTime @default(now())
+
+  @@index([telephone])
+  @@index([matchedTravailleurId])
+  @@map("kobo_submissions")
+}

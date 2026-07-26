@@ -1,0 +1,9 @@
+-- AlterTable
+ALTER TABLE "operations" ADD COLUMN IF NOT EXISTS "canal" TEXT;
+
+-- AlterTable
+ALTER TABLE "imf" ADD COLUMN IF NOT EXISTS "apiKey" TEXT;
+ALTER TABLE "imf" ADD COLUMN IF NOT EXISTS "tauxCommission" DOUBLE PRECISION NOT NULL DEFAULT 0.02;
+
+-- CreateIndex
+CREATE UNIQUE INDEX IF NOT EXISTS "imf_apiKey_key" ON "imf"("apiKey");

@@ -1,4 +1,4 @@
-# Render Blueprint — API NeoForma + Postgres + Redis.
+# Render Blueprint — API NeoForma + Postgres + Redis (Key Value).
 # https://render.com → New → Blueprint → pointer sur ce repo.
 databases:
   - name: neoforma-db
@@ -7,7 +7,7 @@ databases:
     plan: free
 
 services:
-  - type: redis
+  - type: keyvalue
     name: neoforma-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
@@ -18,9 +18,8 @@ services:
     name: neoforma-api
     runtime: docker
     plan: free
-    dockerfilePath: ./Dockerfile
+    dockerfilePath: ./Dockerfile.api
     dockerContext: .
-    dockerTarget: api
     healthCheckPath: /ready
     envVars:
       - key: DATABASE_URL
@@ -30,16 +29,15 @@ services:
       - key: REDIS_URL
         fromService:
           name: neoforma-redis
-          type: redis
+          type: keyvalue
           property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: "3001"
       - key: HOST
         value: 0.0.0.0
+      # Render injecte PORT automatiquement — ne pas le forcer.
       # À renseigner dans le dashboard Render :
       - key: CORS_ORIGIN
         sync: false

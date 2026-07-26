@@ -71,8 +71,10 @@ class LegacyTrainRequest(BaseModel):
 
 @app.on_event("startup")
 def bootstrap_model() -> None:
-    if not model.ready:
-        model.train(samples=None, n_synthetic=400)
+    """Ne bloque pas le démarrage : le 1er /score entraîne si besoin.
+    Sinon Render rate le health check (entraînement 400 samples trop long).
+    """
+    model.load()
 
 
 @app.get("/health")

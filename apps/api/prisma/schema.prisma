@@ -34,6 +34,9 @@ model Travailleur {
   accesProfilsImf      AccesProfilImf[]
   defisOtp             DefiOtp[]
   sessions             Session[]
+  articlesStock        ArticleStock[]
+  tontines             Tontine[]
+  notifications        NotificationInApp[]
 
   @@map("travailleurs")
 }
@@ -64,6 +67,7 @@ model Preferences {
   langue                 String   @default("fr")
   modeIconographique     Boolean  @default(false)
   assistanceVocaleActive Boolean  @default(false)
+  theme                  String   @default("dark")
   fuseau                 String   @default("Africa/Ouagadougou")
   updatedAt              DateTime @updatedAt
 
@@ -113,23 +117,29 @@ model Operation {
   travailleurId          String
   type                   String
   montantFcfa            Int
+  /// Montant déjà encaissé (créance partielle).
+  montantRegleFcfa       Int       @default(0)
   libelle                String?
   dateOperation          DateTime  @default(now())
   statutSync             String    @default("synchronisee")
   identifiantIdempotence String?   @unique
   clientId               String?
   natureStock            String?
+  articleStockId         String?
+  quantiteStock          Int?
   categorieDepense       String?
   /// especes | mobile_money
   canal                  String?
   echeance               DateTime?
   dateReglement          DateTime?
   statutCreance          String?
+  derniereRelanceAt      DateTime?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
   travailleur         Travailleur          @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
   client              ClientInformel?      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  articleStock        ArticleStock?        @relation(fields: [articleStockId], references: [id], onDelete: SetNull)
   operationsHorsLigne OperationHorsLigne[]
 
   @@index([travailleurId, dateOperation])
@@ -172,6 +182,10 @@ model NeoScore {
   critereGestionCreances  Int
   critereCroissance       Int
   periodeAnalyseJours     Int      @default(30)
+  /// heuristic | ml
+  moteur                  String   @default("heuristic")
+  /// Version artefact ML (ex. 20260726-1430) si moteur=ml
+  modelVersion            String?
   dateCalcul              DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
@@ -241,8 +255,10 @@ model Imf {
   niveauAcces       String   @default("consultation")
   contactEmail      String?
   contactNom        String?
-  /// Clé API partenaire (stockée en clair côté ops MVP — à hasher en prod).
+  /// Legacy clair (migré vers apiKeyHash) — ne plus écrire.
   apiKey            String?  @unique
+  /// SHA-256 hex de la clé partenaire (lookup O(1)).
+  apiKeyHash        String?  @unique
   /// Taux de commission NeoForma (ex. 0.02 = 2 %).
   tauxCommission    Float    @default(0.02)
   createdAt         DateTime @default(now())
@@ -266,10 +282,17 @@ model DemandeCredit {
   montantDemandeFcfa     Int
   usage                  String
   modaliteRemboursement  String
-  /// brouillon | soumise | en_examen | approuvee | refusee | decaissee
+  /// brouillon | soumise | en_examen | approuvee | refusee | decaissee | cloturee
   statut                 String    @default("brouillon")
   dateSoumission         DateTime?
   motifDecision          String?
+  /// Features NeoScore figées à la soumission (entraînement ML).
+  featuresSnapshot       Json?
+  dateDecaissement       DateTime?
+  dateEcheance           DateTime?
+  dateCloture            DateTime?
+  /// null | en_cours | rembourse_ok | defaut — label solvabilité
+  outcome                String?
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -282,7 +305,24 @@ model DemandeCredit {
 
   @@index([travailleurId, createdAt])
   @@index([statut])
+  @@index([outcome])
   @@map("demandes_credit")
+}
+
+/// Historique des entraînements ML (monitoring).
+model MlModelRun {
+  id           String   @id @default(uuid())
+  version      String   @unique
+  trainedAt    DateTime @default(now())
+  nSamples     Int
+  nDefaults    Int
+  auc          Float?
+  source       String   @default("mixed")
+  notes        String?
+  active       Boolean  @default(false)
+
+  @@index([trainedAt])
+  @@map("ml_model_runs")
 }
 
 model AccesProfilImf {
@@ -394,4 +434,75 @@ model KoboSubmission {
   @@index([telephone])
   @@index([matchedTravailleurId])
   @@map("kobo_submissions")
+}
+
+/// Catalogue stock local (unités en magasin).
+model ArticleStock {
+  id            String   @id @default(uuid())
+  travailleurId String
+  nom           String
+  unite         String   @default("u")
+  quantite      Int      @default(0)
+  prixUnitaireFcfa Int?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  travailleur Travailleur @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+  operations  Operation[]
+
+  @@unique([travailleurId, nom])
+  @@index([travailleurId])
+  @@map("articles_stock")
+}
+
+/// Tontine suivie par le travailleur.
+model Tontine {
+  id              String   @id @default(uuid())
+  travailleurId   String
+  nom             String
+  cotisationFcfa  Int
+  /// quotidien | hebdo | mensuel
+  frequence       String   @default("mensuel")
+  membres         Int      @default(1)
+  note            String?
+  actif           Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  travailleur Travailleur         @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+  cotisations TontineCotisation[]
+
+  @@index([travailleurId, actif])
+  @@map("tontines")
+}
+
+model TontineCotisation {
+  id          String   @id @default(uuid())
+  tontineId   String
+  montantFcfa Int
+  datePaiement DateTime @default(now())
+  note        String?
+  createdAt   DateTime @default(now())
+
+  tontine Tontine @relation(fields: [tontineId], references: [id], onDelete: Cascade)
+
+  @@index([tontineId, datePaiement])
+  @@map("tontine_cotisations")
+}
+
+/// Notifications in-app (décision crédit, créances, etc.).
+model NotificationInApp {
+  id            String   @id @default(uuid())
+  travailleurId String
+  type          String
+  titre         String
+  corps         String
+  lu            Boolean  @default(false)
+  meta          Json?
+  createdAt     DateTime @default(now())
+
+  travailleur Travailleur @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+
+  @@index([travailleurId, lu, createdAt])
+  @@map("notifications_in_app")
 }

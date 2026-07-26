@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, ApiClientError } from "@/shared/lib/api";
 import { useAuth } from "@/features/auth/AuthContext";
 import { offlineQueue } from "@/shared/lib/offlineQueue";
+import { useTheme, type ThemeMode } from "@/shared/theme/ThemeContext";
 
 type ConsentsList = {
   items: Array<{ type: string; accorde: boolean }>;
@@ -11,9 +12,11 @@ type ConsentsList = {
 
 export function ProfilePage() {
   const { user, logout, refreshMe, setUser } = useAuth();
+  const { theme, setTheme, persistTheme } = useTheme();
   const nav = useNavigate();
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
   const [shareImf, setShareImf] = useState(false);
+  const [themeDraft, setThemeDraft] = useState<ThemeMode>(theme);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,6 +24,17 @@ export function ProfilePage() {
   useEffect(() => {
     setDisplayName(user?.displayName ?? "");
   }, [user?.displayName]);
+
+  useEffect(() => {
+    if (user?.theme) {
+      setTheme(user.theme);
+      setThemeDraft(user.theme);
+    }
+  }, [user?.theme, setTheme]);
+
+  useEffect(() => {
+    setThemeDraft(theme);
+  }, [theme]);
 
   useEffect(() => {
     api
@@ -43,16 +57,19 @@ export function ProfilePage() {
         phone: string;
         displayName: string;
         onboardingCompleted: boolean;
+        theme?: ThemeMode;
       }>("/me", { displayName: displayName.trim() });
       setUser({
         id: me.id,
         phone: me.phone,
         displayName: me.displayName,
         onboardingCompleted: me.onboardingCompleted,
+        theme: themeDraft,
       });
       await api.put("/me/consents", {
         consentCreditPartners: shareImf,
       });
+      await persistTheme(themeDraft);
       await refreshMe().catch(() => undefined);
       setMessage("Profil enregistré");
     } catch (err) {
@@ -72,6 +89,7 @@ export function ProfilePage() {
             height: 64,
             borderRadius: "50%",
             background: "var(--green)",
+            color: "var(--on-brand)",
             display: "grid",
             placeItems: "center",
             margin: "0 auto 12px",
@@ -90,6 +108,31 @@ export function ProfilePage() {
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
         />
+        <label className="lbl" style={{ display: "block", marginTop: 16 }}>
+          Thème
+        </label>
+        <div className="seg">
+          <button
+            type="button"
+            className={themeDraft === "light" ? "on" : ""}
+            onClick={() => {
+              setThemeDraft("light");
+              setTheme("light");
+            }}
+          >
+            Clair
+          </button>
+          <button
+            type="button"
+            className={themeDraft === "dark" ? "on" : ""}
+            onClick={() => {
+              setThemeDraft("dark");
+              setTheme("dark");
+            }}
+          >
+            Sombre
+          </button>
+        </div>
         <label className="lbl" style={{ display: "block", marginTop: 16 }}>
           Partage IMF
         </label>

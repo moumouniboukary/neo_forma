@@ -18,6 +18,7 @@ export const UserProfileSchema = z.object({
   phone: PhoneSchema,
   displayName: z.string().min(1).max(120),
   language: LanguageSchema.default("fr"),
+  theme: z.enum(["light", "dark"]).default("dark"),
   metier: MetierSchema.optional(),
   anciennete: AncienneteSchema.optional(),
   caJour: CaJournalierSchema.optional(),

@@ -276,6 +276,42 @@ export class SyncService {
         );
         return;
       }
+      case "settle_creance": {
+        const op = await this.ledger.settleCreance(
+          travailleurId,
+          mutation.payload.operationId,
+          mutation.payload.amountFcfa
+        );
+        await this.upsertAccepted(
+          travailleurId,
+          mutation,
+          op.id,
+          existingQueue?.id
+        );
+        return;
+      }
+      case "create_tontine_cotisation": {
+        const tontine = await this.prisma.tontine.findFirst({
+          where: { id: mutation.payload.tontineId, travailleurId },
+        });
+        if (!tontine) {
+          throw new SyncError("not_found", "Tontine introuvable", 404);
+        }
+        await this.prisma.tontineCotisation.create({
+          data: {
+            tontineId: tontine.id,
+            montantFcfa: mutation.payload.montantFcfa,
+            note: mutation.payload.note?.trim() || null,
+          },
+        });
+        await this.upsertAccepted(
+          travailleurId,
+          mutation,
+          null,
+          existingQueue?.id
+        );
+        return;
+      }
       default: {
         const _exhaustive: never = mutation;
         throw new SyncError(

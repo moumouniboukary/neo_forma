@@ -6,12 +6,15 @@
   "workspaces": [
     "apps/api",
     "apps/web",
+    "apps/worker",
     "packages/*"
   ],
   "scripts": {
     "dev": "npm run dev --workspace=@neoforma/web & npm run dev --workspace=@neoforma/api",
     "dev:web": "npm run dev --workspace=@neoforma/web",
     "dev:api": "npm run dev --workspace=@neoforma/api",
+    "dev:worker": "npm run dev --workspace=@neoforma/worker",
+    "worker": "npm run start --workspace=@neoforma/worker",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspace=@neoforma/api && npm run test --workspace=@neoforma/neoscore",
@@ -22,6 +25,7 @@
     "db:push": "npm run db:push --workspace=@neoforma/api",
     "mobile:run": "cd apps/mobile && flutter run --dart-define=API_BASE=http://10.0.2.2:3001",
     "mobile:analyze": "cd apps/mobile && flutter analyze",
+    "mobile:e2e": "cd apps/mobile && maestro test e2e/",
     "prod:up": "docker compose -f docker-compose.prod.yml up -d --build"
   },
   "engines": {

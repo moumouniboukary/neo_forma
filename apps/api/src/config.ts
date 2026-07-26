@@ -39,4 +39,10 @@ export const config = {
   release: process.env.APP_RELEASE ?? "neoforma-api@0.1.0",
   /** Webhook Slack/Discord/generic pour alertes ops (5xx, readiness). */
   alertWebhookUrl: process.env.ALERT_WEBHOOK_URL ?? "",
+  /**
+   * URL du service ML NeoScore (ex. http://localhost:8000).
+   * Vide = heuristique TypeScript uniquement.
+   */
+  scoringMlUrl: process.env.SCORING_ML_URL ?? "",
+  scoringMlTimeoutMs: Number(process.env.SCORING_ML_TIMEOUT_MS ?? 2500),
 };

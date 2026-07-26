@@ -2,6 +2,8 @@ import type { PrismaClient, SnapshotScore } from "@prisma/client";
 import type { SubmitCredit } from "@neoforma/shared";
 import { ConsentService } from "../consent/service.js";
 import { ScoringService } from "../scoring/service.js";
+import { hashPartnerApiKey } from "../../lib/partner-keys.js";
+import { createNotification } from "../../lib/notifications.js";
 
 export class CreditError extends Error {
   constructor(
@@ -102,7 +104,7 @@ export class CreditService {
       );
     }
 
-    const { result, offre } = await this.scoring.recalculate(travailleurId, {
+    const { result, offre, features } = await this.scoring.recalculate(travailleurId, {
       persistOffer: true,
     });
     if (!offre) {
@@ -164,6 +166,7 @@ export class CreditService {
         modaliteRemboursement: input.repayment,
         statut: "soumise",
         dateSoumission: new Date(),
+        featuresSnapshot: features as object,
       },
       include: { snapshotScore: true },
     });
@@ -172,6 +175,7 @@ export class CreditService {
   /**
    * Décision IMF : en_examen | approuvee | refusee | decaissee.
    * Crée une commission à l'approbation / décaissement.
+   * Au décaissement : outcome=en_cours + dates échéance.
    */
   async decide(
     demandeId: string,
@@ -179,6 +183,8 @@ export class CreditService {
       statut: "en_examen" | "approuvee" | "refusee" | "decaissee";
       motifDecision?: string;
       imfId?: string;
+      /** Durée en mois pour dateEcheance (défaut 3). */
+      dureeMois?: number;
     }
   ) {
     const demande = await this.prisma.demandeCredit.findUnique({
@@ -188,12 +194,28 @@ export class CreditService {
       throw new CreditError("not_found", "Demande introuvable", 404);
     }
 
+    const now = new Date();
+    const extra: {
+      dateDecaissement?: Date;
+      dateEcheance?: Date;
+      outcome?: string;
+    } = {};
+    if (input.statut === "decaissee") {
+      const mois = Math.max(1, Math.min(24, input.dureeMois ?? 3));
+      const echeance = new Date(now);
+      echeance.setMonth(echeance.getMonth() + mois);
+      extra.dateDecaissement = now;
+      extra.dateEcheance = echeance;
+      extra.outcome = "en_cours";
+    }
+
     const updated = await this.prisma.demandeCredit.update({
       where: { id: demandeId },
       data: {
         statut: input.statut,
         motifDecision: input.motifDecision?.slice(0, 500) ?? null,
         ...(input.imfId ? { imfId: input.imfId } : {}),
+        ...extra,
       },
       include: { snapshotScore: true },
     });
@@ -205,7 +227,111 @@ export class CreditService {
       await this.ensureCommission(updated.id, updated.imfId, updated.montantDemandeFcfa);
     }
 
+    await this.notifyDecision(updated.travailleurId, updated.reference, input.statut);
+
     return updated;
+  }
+
+  /** Notifie le travailleur d'une décision de crédit (approuvée / refusée / etc.). */
+  private async notifyDecision(
+    travailleurId: string,
+    reference: string,
+    statut: "en_examen" | "approuvee" | "refusee" | "decaissee"
+  ): Promise<void> {
+    const messages: Record<typeof statut, { titre: string; corps: string }> = {
+      en_examen: {
+        titre: "Demande en examen",
+        corps: `Votre demande ${reference} est en cours d'examen par l'IMF.`,
+      },
+      approuvee: {
+        titre: "Crédit approuvé",
+        corps: `Bonne nouvelle — votre demande ${reference} a été approuvée.`,
+      },
+      refusee: {
+        titre: "Demande refusée",
+        corps: `Votre demande ${reference} n'a pas été retenue.`,
+      },
+      decaissee: {
+        titre: "Crédit décaissé",
+        corps: `Les fonds pour la demande ${reference} ont été décaissés.`,
+      },
+    };
+    const { titre, corps } = messages[statut];
+    await createNotification(this.prisma, {
+      travailleurId,
+      type: "credit_decision",
+      titre,
+      corps,
+      meta: { reference, statut },
+    });
+  }
+
+  /**
+   * Clôture solvabilité : rembourse_ok | defaut.
+   * Alimente le dataset d'entraînement ML.
+   */
+  async recordOutcome(
+    demandeId: string,
+    input: {
+      outcome: "rembourse_ok" | "defaut";
+      motif?: string;
+    }
+  ) {
+    const demande = await this.prisma.demandeCredit.findUnique({
+      where: { id: demandeId },
+    });
+    if (!demande) {
+      throw new CreditError("not_found", "Demande introuvable", 404);
+    }
+    if (demande.statut !== "decaissee" && demande.outcome !== "en_cours") {
+      throw new CreditError(
+        "invalid_state",
+        "Outcome réservé aux crédits décaissés / en cours",
+        400
+      );
+    }
+
+    return this.prisma.demandeCredit.update({
+      where: { id: demandeId },
+      data: {
+        outcome: input.outcome,
+        statut: "cloturee",
+        dateCloture: new Date(),
+        motifDecision: input.motif?.slice(0, 500) ?? demande.motifDecision,
+      },
+      include: { snapshotScore: true },
+    });
+  }
+
+  /** Dataset labellisé pour ré-entraînement ML. */
+  async exportMlTrainingSamples(limit = 2000) {
+    const rows = await this.prisma.demandeCredit.findMany({
+      where: {
+        outcome: { in: ["rembourse_ok", "defaut"] },
+      },
+      orderBy: { dateCloture: "desc" },
+      take: Math.min(limit, 5000),
+      select: {
+        id: true,
+        reference: true,
+        outcome: true,
+        featuresSnapshot: true,
+        montantDemandeFcfa: true,
+        dateCloture: true,
+      },
+    });
+
+    return rows
+      .filter((r) => r.featuresSnapshot != null)
+      .map((r) => ({
+        demandeId: r.id,
+        reference: r.reference,
+        outcome: r.outcome,
+        default: r.outcome === "defaut" ? 1 : 0,
+        features: r.featuresSnapshot,
+        montantDemandeFcfa: r.montantDemandeFcfa,
+        dateCloture: r.dateCloture?.toISOString() ?? null,
+      }));
   }
 
   /** Crée la commission NeoForma si absente (idempotent). */
@@ -304,7 +430,9 @@ export class CreditService {
         contactNom: "Partenariats",
         contactEmail: "partenariats@neoforma.bf",
         tauxCommission: 0.02,
-        apiKey: process.env.PARTNER_API_KEY || null,
+        apiKeyHash: process.env.PARTNER_API_KEY
+          ? hashPartnerApiKey(process.env.PARTNER_API_KEY)
+          : null,
       },
     });
   }

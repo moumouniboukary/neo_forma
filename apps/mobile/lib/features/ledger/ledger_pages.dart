@@ -6,8 +6,10 @@ import 'package:intl/intl.dart';
 
 import '../../core/api/client.dart';
 import '../../core/l10n/locale_provider.dart';
+import '../../core/offline/local_cache.dart';
 import '../../core/offline/queue.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/widgets/nf_numeric_keypad.dart';
 import '../../core/widgets/nf_speak_button.dart';
 import '../../core/widgets/nf_widgets.dart';
 import '../../core/voice/voice_service.dart';
@@ -24,8 +26,12 @@ class RecordPage extends ConsumerStatefulWidget {
 class _RecordPageState extends ConsumerState<RecordPage> {
   String type = 'vente';
   String canal = 'especes';
+  String natureStock = 'entree';
+  DateTime dueDate = DateTime.now().add(const Duration(days: 7));
   final amountCtrl = TextEditingController(text: '2500');
   final clientCtrl = TextEditingController();
+  final productCtrl = TextEditingController();
+  final qtyCtrl = TextEditingController(text: '1');
   String? selectedClientId;
   bool loading = false;
   bool done = false;
@@ -37,6 +43,8 @@ class _RecordPageState extends ConsumerState<RecordPage> {
   void dispose() {
     amountCtrl.dispose();
     clientCtrl.dispose();
+    productCtrl.dispose();
+    qtyCtrl.dispose();
     super.dispose();
   }
 
@@ -156,7 +164,17 @@ class _RecordPageState extends ConsumerState<RecordPage> {
       'type': type,
       'amountFcfa': amount,
       if (type == 'vente') 'label': 'Vente',
-      if (type == 'stock') ...{'label': 'Stock', 'natureStock': 'entree'},
+      if (type == 'stock') ...{
+        'label': productCtrl.text.trim().isEmpty
+            ? 'Stock'
+            : productCtrl.text.trim(),
+        'natureStock': natureStock,
+        'productName': productCtrl.text.trim().isEmpty
+            ? 'Article'
+            : productCtrl.text.trim(),
+        'quantiteStock':
+            int.tryParse(qtyCtrl.text.replaceAll(RegExp(r'\s'), '')) ?? 1,
+      },
       if (type == 'depense') 'label': 'Dépense',
       if (type == 'creance') ...{
         if (selectedClientId != null)
@@ -164,7 +182,7 @@ class _RecordPageState extends ConsumerState<RecordPage> {
         else
           'clientName':
               clientCtrl.text.trim().isEmpty ? 'Client' : clientCtrl.text.trim(),
-        'dueAt': DateTime.now().add(const Duration(days: 7)).toUtc().toIso8601String(),
+        'dueAt': dueDate.toUtc().toIso8601String(),
       },
       if (type == 'vente' || type == 'depense') 'canal': canal,
       'clientMutationId': mutationId,
@@ -214,13 +232,13 @@ class _RecordPageState extends ConsumerState<RecordPage> {
           padding: const EdgeInsets.all(24),
           child: Column(
             children: [
-              const Icon(Icons.check_circle, size: 72, color: NfTokens.ok),
+              Icon(Icons.check_circle, size: 72, color: NfTokens.ok),
               const SizedBox(height: 12),
               Text(
                 savedOffline
                     ? 'Enregistré hors ligne — synchronisation au retour du réseau'
                     : 'Synchronisé',
-                style: const TextStyle(color: NfTokens.textMute),
+                style: TextStyle(color: NfTokens.textMute),
               ),
               const Spacer(),
               NfPrimaryButton(label: 'Accueil', onPressed: () => context.go('/app')),
@@ -305,10 +323,52 @@ class _RecordPageState extends ConsumerState<RecordPage> {
               onSelected: (id) => setState(() => selectedClientId = id),
               onCreate: _createClient,
             ),
+            const SizedBox(height: 12),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(t('dueDate')),
+              subtitle: Text(
+                DateFormat.yMMMd('fr').format(dueDate),
+                style: TextStyle(color: NfTokens.textMute),
+              ),
+              trailing: const Icon(Icons.calendar_today_outlined),
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: dueDate,
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+                );
+                if (picked != null) setState(() => dueDate = picked);
+              },
+            ),
+          ],
+          if (type == 'stock') ...[
+            const SizedBox(height: 16),
+            NfSegmented(
+              value: natureStock,
+              onChanged: (v) => setState(() => natureStock = v),
+              options: [
+                ('entree', t('stockIn')),
+                ('sortie', t('stockOut')),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: productCtrl,
+              decoration: InputDecoration(labelText: t('articleName')),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: qtyCtrl,
+              keyboardType: TextInputType.number,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              decoration: InputDecoration(labelText: t('quantity')),
+            ),
           ],
           if (type == 'vente' || type == 'depense') ...[
             const SizedBox(height: 16),
-            const Text('Canal', style: TextStyle(color: NfTokens.textMute)),
+            Text('Canal', style: TextStyle(color: NfTokens.textMute)),
             const SizedBox(height: 8),
             NfSegmented(
               value: canal,
@@ -320,19 +380,15 @@ class _RecordPageState extends ConsumerState<RecordPage> {
             ),
           ],
           const SizedBox(height: 16),
-          TextField(
+          NfKeypadAmountField(
             controller: amountCtrl,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: InputDecoration(
-              labelText: t('amount'),
-              suffixIcon: IconButton(
-                tooltip: 'Dicter le montant',
-                onPressed: listening ? null : _dictateAmount,
-                icon: Icon(
-                  listening ? Icons.mic : Icons.mic_none,
-                  color: listening ? NfTokens.brand : NfTokens.textMute,
-                ),
+            label: t('amount'),
+            trailing: IconButton(
+              tooltip: 'Dicter le montant',
+              onPressed: listening ? null : _dictateAmount,
+              icon: Icon(
+                listening ? Icons.mic : Icons.mic_none,
+                color: listening ? NfTokens.brand : NfTokens.textMute,
               ),
             ),
           ),
@@ -530,7 +586,7 @@ class _VentesPageState extends ConsumerState<VentesPage> {
             ),
             const SizedBox(height: 12),
             if (ops.isEmpty)
-              const Text('Aucune vente', style: TextStyle(color: NfTokens.textMute))
+              Text('Aucune vente', style: TextStyle(color: NfTokens.textMute))
             else
               ...ops.map(
                 (op) => ListTile(
@@ -538,7 +594,7 @@ class _VentesPageState extends ConsumerState<VentesPage> {
                   title: Text(op['label']?.toString() ?? 'Vente'),
                   subtitle: Text(
                     op['dateOperation']?.toString() ?? op['createdAt']?.toString() ?? '',
-                    style: const TextStyle(color: NfTokens.textMute, fontSize: 12),
+                    style: TextStyle(color: NfTokens.textMute, fontSize: 12),
                   ),
                   trailing: Text(
                     '+${fmt.format(op['amountFcfa'] ?? 0)}',
@@ -563,6 +619,7 @@ class DettesPage extends ConsumerStatefulWidget {
 class _DettesPageState extends ConsumerState<DettesPage> {
   List<Map<String, dynamic>> ops = [];
   String? busyId;
+  bool fromCache = false;
 
   @override
   void initState() {
@@ -576,29 +633,169 @@ class _DettesPageState extends ConsumerState<DettesPage> {
             '/operations?type=creance',
             parse: (d) => d as List,
           );
+      final mapped = list
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .where((o) {
+            final s = o['statutCreance']?.toString();
+            return s == null || s == 'ouverte' || s == 'en_retard';
+          })
+          .toList();
+      await ref.read(localCacheProvider).putList(
+            LocalCacheKeys.operations,
+            list.map((e) => Map<String, dynamic>.from(e as Map)).toList(),
+          );
+      if (!mounted) return;
       setState(() {
-        ops = list
-            .map((e) => Map<String, dynamic>.from(e as Map))
-            .where((o) {
-              final s = o['statutCreance']?.toString();
-              return s == null || s == 'ouverte' || s == 'en_retard';
-            })
-            .toList();
+        ops = mapped;
+        fromCache = false;
       });
     } catch (_) {
-      setState(() => ops = []);
+      final cached = ref
+          .read(localCacheProvider)
+          .getList(LocalCacheKeys.operations)
+          .where((o) {
+            if (o['type']?.toString() != 'creance') return false;
+            final s = o['statutCreance']?.toString();
+            return s == null || s == 'ouverte' || s == 'en_retard';
+          })
+          .toList();
+      if (!mounted) return;
+      setState(() {
+        ops = cached;
+        fromCache = true;
+      });
     }
   }
 
-  Future<void> _settle(String id) async {
+  int _remaining(Map<String, dynamic> op) {
+    final total = op['remainingFcfa'] as int? ??
+        ((op['amountFcfa'] as int? ?? 0) -
+            (op['montantRegleFcfa'] as int? ??
+                op['amountSettledFcfa'] as int? ??
+                0));
+    return total < 0 ? 0 : total;
+  }
+
+  Future<void> _settle(String id, {int? amountFcfa}) async {
     setState(() => busyId = id);
+    final mutationId = OfflineQueue.newId();
+    final createdAt = DateTime.now().toUtc().toIso8601String();
+    final payload = <String, dynamic>{
+      'operationId': id,
+      if (amountFcfa != null) 'amountFcfa': amountFcfa,
+    };
     try {
-      await ref.read(apiClientProvider).post('/operations/$id/settle');
-      // Met à jour l'accueil et le cahier (créance réglée = flux entrant).
+      await ref.read(apiClientProvider).post(
+            '/operations/$id/settle',
+            data: {if (amountFcfa != null) 'amountFcfa': amountFcfa},
+          );
       ref.read(ledgerRevisionProvider.notifier).state++;
       await _load();
+    } on ApiException catch (e) {
+      if (e.isOffline || e.isServerError) {
+        await ref.read(offlineQueueProvider).enqueue(
+              QueuedMutation(
+                clientMutationId: mutationId,
+                kind: 'settle_creance',
+                payload: payload,
+                createdAt: createdAt,
+              ),
+            );
+        await ref.read(syncServiceProvider).refreshCount();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(ref.read(nfStringsProvider)('savedOffline'))),
+          );
+        }
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
     } finally {
-      setState(() => busyId = null);
+      if (mounted) setState(() => busyId = null);
+    }
+  }
+
+  Future<void> _settlePartial(Map<String, dynamic> op) async {
+    final id = op['id']?.toString() ?? '';
+    final reste = _remaining(op);
+    final ctrl = TextEditingController(text: '$reste');
+    final t = ref.read(nfStringsProvider);
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(t('settlePartial')),
+        content: SingleChildScrollView(
+          child: NfKeypadAmountField(controller: ctrl, label: t('amount')),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t('deny')),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t('confirm')),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final amount = int.tryParse(ctrl.text.replaceAll(RegExp(r'\s'), '')) ?? 0;
+    if (amount <= 0) return;
+    await _settle(id, amountFcfa: amount);
+  }
+
+  Future<void> _remind(String id) async {
+    setState(() => busyId = id);
+    final t = ref.read(nfStringsProvider);
+    try {
+      await ref.read(apiClientProvider).post('/operations/$id/remind');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(t('reminderSent'))),
+        );
+      }
+      await _load();
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busyId = null);
+    }
+  }
+
+  Future<void> _changeDue(Map<String, dynamic> op) async {
+    final id = op['id']?.toString() ?? '';
+    final current = DateTime.tryParse(op['dueAt']?.toString() ?? '') ??
+        DateTime.now().add(const Duration(days: 7));
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current.isBefore(DateTime.now()) ? DateTime.now() : current,
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (picked == null) return;
+    setState(() => busyId = id);
+    try {
+      await ref.read(apiClientProvider).patch(
+            '/operations/$id/due',
+            data: {'dueAt': picked.toUtc().toIso8601String()},
+          );
+      ref.read(ledgerRevisionProvider.notifier).state++;
+      await _load();
+    } on ApiException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message)),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busyId = null);
     }
   }
 
@@ -606,43 +803,97 @@ class _DettesPageState extends ConsumerState<DettesPage> {
   Widget build(BuildContext context) {
     ref.listen<int>(ledgerRevisionProvider, (_, _) => _load());
     final fmt = NumberFormat.decimalPattern('fr');
-    final total = ops.fold<int>(0, (s, o) => s + (o['amountFcfa'] as int? ?? 0));
+    final t = ref.watch(nfStringsProvider);
+    final total = ops.fold<int>(0, (s, o) => s + _remaining(o));
     return Scaffold(
-      appBar: AppBar(title: const Text('Créances')),
+      appBar: AppBar(title: Text(t('debts'))),
       body: RefreshIndicator(
         onRefresh: _load,
         child: ListView(
           padding: const EdgeInsets.all(20),
           children: [
             Text(
-              'À récupérer · ${fmt.format(total)} FCFA',
-              style: const TextStyle(color: NfTokens.warn, fontWeight: FontWeight.w700),
+              '${t('toCollect')} · ${fmt.format(total)} FCFA',
+              style: TextStyle(color: NfTokens.warn, fontWeight: FontWeight.w700),
             ),
+            if (fromCache)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  t('offlineCache'),
+                  style: TextStyle(color: NfTokens.textMute, fontSize: 12),
+                ),
+              ),
             const SizedBox(height: 12),
             if (ops.isEmpty)
-              const Text('Aucune créance ouverte', style: TextStyle(color: NfTokens.textMute))
+              Text(t('noOpenDebts'), style: TextStyle(color: NfTokens.textMute))
             else
               ...ops.map((op) {
                 final id = op['id']?.toString() ?? '';
+                final reste = _remaining(op);
+                final overdue = op['statutCreance']?.toString() == 'en_retard';
+                final due = op['dueAt']?.toString();
                 return Card(
-                  child: ListTile(
-                    title: Text(op['clientName']?.toString() ?? 'Client'),
-                    subtitle: Text(
-                      op['statutCreance']?.toString() == 'en_retard'
-                          ? 'En retard'
-                          : 'Ouverte',
-                    ),
-                    trailing: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.end,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          fmt.format(op['amountFcfa'] ?? 0),
-                          style: const TextStyle(fontWeight: FontWeight.w700),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                op['clientName']?.toString() ?? 'Client',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              fmt.format(reste),
+                              style: const TextStyle(fontWeight: FontWeight.w800),
+                            ),
+                          ],
                         ),
-                        TextButton(
-                          onPressed: busyId == id ? null : () => _settle(id),
-                          child: Text(busyId == id ? '…' : 'Régler'),
+                        const SizedBox(height: 4),
+                        Text(
+                          overdue
+                              ? t('overdue')
+                              : (due != null
+                                  ? '${t('dueDate')} · ${due.substring(0, 10)}'
+                                  : t('openDebt')),
+                          style: TextStyle(
+                            color: overdue ? NfTokens.danger : NfTokens.textMute,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 4,
+                          children: [
+                            TextButton(
+                              onPressed:
+                                  busyId == id ? null : () => _settle(id),
+                              child: Text(busyId == id ? '…' : t('confirm')),
+                            ),
+                            TextButton(
+                              onPressed: busyId == id
+                                  ? null
+                                  : () => _settlePartial(op),
+                              child: Text(t('settlePartial')),
+                            ),
+                            TextButton(
+                              onPressed:
+                                  busyId == id ? null : () => _remind(id),
+                              child: Text(t('remind')),
+                            ),
+                            TextButton(
+                              onPressed: busyId == id
+                                  ? null
+                                  : () => _changeDue(op),
+                              child: Text(t('dueDate')),
+                            ),
+                          ],
                         ),
                       ],
                     ),

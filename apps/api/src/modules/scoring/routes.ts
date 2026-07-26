@@ -23,7 +23,7 @@ export const scoringRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  /** POST /score/recalculate — force recalcul */
+  /** POST /score/recalculate — force recalcul (ML si SCORING_ML_URL) */
   app.post(
     "/recalculate",
     { preHandler: [app.authenticate] },

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/client.dart';
 import '../../core/l10n/locale_provider.dart';
@@ -10,7 +11,9 @@ import '../../core/offline/queue.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/nf_speak_button.dart';
 import '../../core/widgets/nf_widgets.dart';
+import 'auth/app_lock.dart';
 import 'auth/auth_provider.dart';
+import 'notifications/notifications_data.dart';
 import 'sync/sync_service.dart';
 
 class ScorePage extends ConsumerStatefulWidget {
@@ -98,7 +101,7 @@ class _ScorePageState extends ConsumerState<ScorePage> {
           Center(
             child: Text(
               '${t(statusKey)} · segment ${score!['segment']}',
-              style: const TextStyle(color: NfTokens.textMute),
+              style: TextStyle(color: NfTokens.textMute),
             ),
           ),
           const SizedBox(height: 20),
@@ -119,7 +122,7 @@ class _ScorePageState extends ConsumerState<ScorePage> {
                       Expanded(child: Text(e.$1)),
                       Text(
                         '${pct.round()}%',
-                        style: const TextStyle(color: NfTokens.textMute),
+                        style: TextStyle(color: NfTokens.textMute),
                       ),
                     ],
                   ),
@@ -155,7 +158,7 @@ class _ScorePageState extends ConsumerState<ScorePage> {
               onPressed: () => context.push('/app/credit'),
             )
           else
-            const Text(
+            Text(
               'Continuez d’enregistrer des ventes pour dépasser 50.',
               style: TextStyle(color: NfTokens.textMute),
             ),
@@ -285,7 +288,7 @@ class _CreditPageState extends ConsumerState<CreditPage> {
                 reference == 'HORS-LIGNE'
                     ? 'Synchronisation automatique'
                     : 'Statut · En cours · 24–48 h',
-                style: const TextStyle(color: NfTokens.textMute),
+                style: TextStyle(color: NfTokens.textMute),
               ),
               const Spacer(),
               NfPrimaryButton(
@@ -320,7 +323,7 @@ class _CreditPageState extends ConsumerState<CreditPage> {
           if (offer != null && !eligible)
             Text(
               'Non éligible (score ${offer?['score'] ?? '—'})',
-              style: const TextStyle(color: NfTokens.danger),
+              style: TextStyle(color: NfTokens.danger),
             ),
           if (eligible)
             Card(
@@ -329,7 +332,7 @@ class _CreditPageState extends ConsumerState<CreditPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Montant estimé',
                       style: TextStyle(color: NfTokens.textMute),
                     ),
@@ -339,7 +342,7 @@ class _CreditPageState extends ConsumerState<CreditPage> {
                     ),
                     Text(
                       '${fmt.format(offer!['minFcfa'])} – ${fmt.format(offer!['maxFcfa'])} · ${offer!['durationMonths']} mois',
-                      style: const TextStyle(color: NfTokens.textMute),
+                      style: TextStyle(color: NfTokens.textMute),
                     ),
                   ],
                 ),
@@ -370,7 +373,7 @@ class _CreditPageState extends ConsumerState<CreditPage> {
             onChanged: (v) => amount = int.tryParse(v) ?? amount,
           ),
           const SizedBox(height: 12),
-          const Text(
+          Text(
             'Objet du crédit',
             style: TextStyle(color: NfTokens.textMute),
           ),
@@ -412,6 +415,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
   late TextEditingController nameCtrl;
   bool shareImf = false;
   String language = 'fr';
+  String theme = 'dark';
   bool iconMode = false;
   bool voiceAssist = false;
   bool saving = false;
@@ -426,6 +430,9 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     language = NfStrings.normalize(
       user?.language ?? ref.read(uxPrefsProvider).language,
     );
+    theme = user?.theme == 'light'
+        ? 'light'
+        : ref.read(uxPrefsProvider).theme;
     iconMode = ref.read(uxPrefsProvider).iconMode;
     voiceAssist = ref.read(uxPrefsProvider).voiceAssist;
     _loadConsents();
@@ -488,6 +495,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             language: language,
             iconMode: iconMode,
             voiceAssist: voiceAssist,
+            theme: theme,
           );
       setState(() => message = 'Profil enregistré');
     } on ApiException catch (e) {
@@ -521,6 +529,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               language: language,
               iconMode: iconMode,
               voiceAssist: voiceAssist,
+              theme: theme,
             );
         setState(() => message = 'Enregistré hors ligne — sync au retour réseau');
       } else {
@@ -528,6 +537,35 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       }
     } finally {
       setState(() => saving = false);
+    }
+  }
+
+  Future<void> _sharePassport() async {
+    final t = ref.read(nfStringsProvider);
+    try {
+      final p = await ref.read(apiClientProvider).get<Map<String, dynamic>>(
+            '/me/passport',
+            parse: (d) => Map<String, dynamic>.from(d as Map),
+          );
+      final score = p['score'] as Map? ?? {};
+      final sales = p['sales30d'] as Map? ?? {};
+      final debts = p['openDebts'] as Map? ?? {};
+      final stock = p['stock'] as Map? ?? {};
+      final profile = p['profile'] as Map? ?? {};
+      final text = [
+        '${NfTokens.appName} — ${t('passport')}',
+        'Nom : ${profile['displayName'] ?? ''}',
+        'Tél : ${profile['phone'] ?? ''}',
+        'NeoScore : ${score['valeur'] ?? '—'} (${score['segment'] ?? ''})',
+        'Ventes 30j : ${sales['totalFcfa'] ?? 0} FCFA',
+        'Créances : ${debts['totalFcfa'] ?? 0} FCFA',
+        'Stock : ${stock['articleCount'] ?? 0} articles',
+      ].join('\n');
+      await SharePlus.instance.share(
+        ShareParams(text: text, subject: t('passport')),
+      );
+    } on ApiException catch (e) {
+      setState(() => error = e.message);
     }
   }
 
@@ -629,6 +667,8 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     final user = ref.watch(authProvider).user;
     final pending = ref.watch(syncPendingProvider);
     final t = ref.watch(nfStringsProvider);
+    final lock = ref.watch(appLockProvider);
+    final unread = ref.watch(unreadNotificationsCountProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(t('profile'))),
@@ -642,7 +682,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               (user?.displayName ?? 'N').substring(0, 1).toUpperCase(),
               style: const TextStyle(
                 fontSize: 28,
-                color: NfTokens.bg,
+                color: NfTokens.onBrand,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -651,7 +691,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           Text(
             user?.phone ?? '',
             textAlign: TextAlign.center,
-            style: const TextStyle(color: NfTokens.textMute),
+            style: TextStyle(color: NfTokens.textMute),
           ),
           const SizedBox(height: 20),
           TextField(
@@ -659,7 +699,7 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             decoration: InputDecoration(labelText: t('displayName')),
           ),
           const SizedBox(height: 12),
-          Text(t('language'), style: const TextStyle(color: NfTokens.textMute)),
+          Text(t('language'), style: TextStyle(color: NfTokens.textMute)),
           const SizedBox(height: 8),
           NfSegmented(
             value: language,
@@ -667,11 +707,25 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             options: [for (final e in NfStrings.selectableLanguages) e],
           ),
           const SizedBox(height: 12),
-          Text(t('iconMode'), style: const TextStyle(color: NfTokens.textMute)),
+          Text(t('theme'), style: TextStyle(color: NfTokens.textMute)),
+          const SizedBox(height: 8),
+          NfSegmented(
+            value: theme,
+            onChanged: (v) {
+              setState(() => theme = v);
+              ref.read(uxPrefsProvider.notifier).setThemeLocal(v);
+            },
+            options: [
+              ('light', t('themeLight')),
+              ('dark', t('themeDark')),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(t('iconMode'), style: TextStyle(color: NfTokens.textMute)),
           const SizedBox(height: 4),
           Text(
             t('iconModeHint'),
-            style: const TextStyle(color: NfTokens.textMute, fontSize: 13),
+            style: TextStyle(color: NfTokens.textMute, fontSize: 13),
           ),
           const SizedBox(height: 8),
           NfSegmented(
@@ -682,12 +736,12 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           const SizedBox(height: 12),
           Text(
             t('voiceAssist'),
-            style: const TextStyle(color: NfTokens.textMute),
+            style: TextStyle(color: NfTokens.textMute),
           ),
           const SizedBox(height: 4),
           Text(
             t('voiceAssistHint'),
-            style: const TextStyle(color: NfTokens.textMute, fontSize: 13),
+            style: TextStyle(color: NfTokens.textMute, fontSize: 13),
           ),
           const SizedBox(height: 8),
           NfSegmented(
@@ -701,14 +755,14 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               children: [
                 Text(
                   t('listen'),
-                  style: const TextStyle(color: NfTokens.textMute),
+                  style: TextStyle(color: NfTokens.textMute),
                 ),
                 NfSpeakButton(labelKey: 'voiceAssist', alwaysShow: true),
               ],
             ),
           ],
           const SizedBox(height: 12),
-          Text(t('shareImf'), style: const TextStyle(color: NfTokens.textMute)),
+          Text(t('shareImf'), style: TextStyle(color: NfTokens.textMute)),
           NfSegmented(
             value: shareImf ? 'ok' : 'no',
             onChanged: (v) => setState(() => shareImf = v == 'ok'),
@@ -721,6 +775,63 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
           const SizedBox(height: 12),
           NfPrimaryButton(label: t('save'), loading: saving, onPressed: _save),
           const SizedBox(height: 16),
+          ListTile(
+            leading: const Icon(Icons.badge_outlined),
+            title: Text(t('passport')),
+            trailing: const Icon(Icons.ios_share),
+            onTap: _sharePassport,
+          ),
+          ListTile(
+            leading: const Icon(Icons.inventory_2_outlined),
+            title: Text(t('stock')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/app/stock'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.groups_outlined),
+            title: Text(t('tontine')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/app/tontine'),
+          ),
+          ListTile(
+            leading: const Icon(Icons.notifications_outlined),
+            title: Text(t('notifications')),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (unread > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
+                    decoration: BoxDecoration(
+                      color: NfTokens.danger,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      '$unread',
+                      style: const TextStyle(fontSize: 11, color: Colors.white),
+                    ),
+                  ),
+                const Icon(Icons.chevron_right),
+              ],
+            ),
+            onTap: () => context.push('/app/notifications'),
+          ),
+          if (lock.biometricAvailable) ...[
+            const SizedBox(height: 12),
+            Text(t('lock'), style: TextStyle(color: NfTokens.textMute)),
+            const SizedBox(height: 8),
+            NfSegmented(
+              value: lock.biometricEnabled ? 'oui' : 'non',
+              onChanged: (v) => ref
+                  .read(appLockProvider.notifier)
+                  .setBiometricEnabled(v == 'oui'),
+              options: const [('oui', 'Oui'), ('non', 'Non')],
+            ),
+            const SizedBox(height: 8),
+          ],
           ListTile(
             title: Text(t('neoscore')),
             trailing: const Icon(Icons.chevron_right),

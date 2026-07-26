@@ -2,10 +2,14 @@
  * Worker NeoForma — consomme la file Redis (SMS, alertes, MM).
  * Usage : npm run worker — nécessite REDIS_URL.
  */
+import { PrismaClient } from "@prisma/client";
 import { dequeueJob, type JobPayload } from "../../api/src/lib/jobs.js";
 import { createSmsGateway } from "../../api/src/lib/sms.js";
 import { createMobileMoneyGateway } from "../../api/src/lib/mobile-money.js";
 import { sendAlert } from "../../api/src/lib/observability.js";
+import { notifyOverdueCreances } from "../../api/src/lib/notifications.js";
+
+const prisma = new PrismaClient();
 
 async function handle(job: JobPayload): Promise<void> {
   switch (job.kind) {
@@ -35,6 +39,11 @@ async function handle(job: JobPayload): Promise<void> {
       console.info(`[worker] mm ${result.status} ${result.externalId}`);
       return;
     }
+    case "overdue_notify": {
+      const count = await notifyOverdueCreances(prisma);
+      console.info(`[worker] overdue_notify → ${count} notification(s)`);
+      return;
+    }
     default:
       console.warn("[worker] kind inconnu", job);
   }
@@ -57,5 +66,10 @@ async function main(): Promise<void> {
     }
   }
 }
+
+process.on("SIGTERM", async () => {
+  await prisma.$disconnect();
+  process.exit(0);
+});
 
 main();

@@ -8,6 +8,7 @@ export type StoredUser = {
   displayName: string;
   onboardingCompleted: boolean;
   language?: string;
+  theme?: "light" | "dark";
   statutCompte?: string;
 };
 

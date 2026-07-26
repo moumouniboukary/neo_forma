@@ -22,5 +22,16 @@ services:
     ports:
       - "6379:6379"
 
+  # ML solvabilité — docker compose --profile ml up -d neoscore-ml
+  neoscore-ml:
+    profiles: ["ml"]
+    build:
+      context: ./services/neoscore
+    container_name: neoforma-neoscore-ml
+    ports:
+      - "8000:8000"
+    environment:
+      PORT: "8000"
+
 volumes:
   neoforma_pg:

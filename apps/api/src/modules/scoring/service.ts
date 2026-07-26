@@ -9,7 +9,12 @@ import {
   computeNeoScore,
   ELIGIBILITY_THRESHOLD,
 } from "@neoforma/neoscore";
-import type { NeoScoreResult } from "@neoforma/shared";
+import type { NeoScoreResult, ScoreFeatures } from "@neoforma/shared";
+import {
+  isMlScoringEnabled,
+  mlScore,
+  mlToNeoScoreResult,
+} from "../../lib/ml-scoring.js";
 import { featuresFromProfilAndOps } from "./features.js";
 
 export class ScoringError extends Error {
@@ -54,6 +59,10 @@ function toResult(
     },
     history,
     computedAt: neoscore.dateCalcul.toISOString(),
+    engine: (neoscore.moteur === "ml" ? "ml" : "heuristic") as
+      | "ml"
+      | "heuristic",
+    modelVersion: neoscore.modelVersion ?? null,
   };
 }
 
@@ -61,7 +70,8 @@ export class ScoringService {
   constructor(private readonly prisma: PrismaClient) {}
 
   /**
-   * Calcule, persiste NeoScore + historique.
+   * Calcule features + score (ML si SCORING_ML_URL, sinon heuristique).
+   * Persiste NeoScore + historique.
    * Crée / rafraîchit une offre uniquement si `persistOffer` (défaut true pour crédit).
    */
   async recalculate(
@@ -71,6 +81,7 @@ export class ScoringService {
     result: NeoScoreResult;
     neoscore: NeoScore;
     offre: OffreCredit | null;
+    features: ScoreFeatures;
   }> {
     const persistOffer = opts.persistOffer ?? true;
 
@@ -106,15 +117,26 @@ export class ScoringService {
       .reverse()
       .map((h) => ({ month: h.periode, score: h.valeur }));
 
-    const result = computeNeoScore(
-      featuresFromProfilAndOps({
-        profil: user.profilActivite,
-        ops,
-        hasSmartphone: Boolean(user.telephone),
-        demandes,
-      }),
-      history
-    );
+    const features = featuresFromProfilAndOps({
+      profil: user.profilActivite,
+      ops,
+      hasSmartphone: Boolean(user.telephone),
+      demandes,
+    });
+
+    let result: NeoScoreResult = computeNeoScore(features, history);
+    let moteur: "heuristic" | "ml" = "heuristic";
+    let modelVersion: string | null = null;
+
+    if (isMlScoringEnabled()) {
+      const ml = await mlScore(features);
+      if (ml) {
+        const mlResult = mlToNeoScoreResult(ml, history);
+        result = mlResult;
+        moteur = "ml";
+        modelVersion = mlResult.modelVersion ?? ml.modelVersion ?? null;
+      }
+    }
 
     const neoscore = await this.prisma.neoScore.upsert({
       where: { travailleurId },
@@ -124,21 +146,25 @@ export class ScoringService {
         seuilEligibilite: ELIGIBILITY_THRESHOLD,
         eligible: result.eligible,
         segment: result.segment,
-        critereRegularite: result.criteria.regularite,
-        critereVolume: result.criteria.volume,
-        critereGestionCreances: result.criteria.dettes,
-        critereCroissance: result.criteria.croissance,
+        critereRegularite: Math.round(result.criteria.regularite),
+        critereVolume: Math.round(result.criteria.volume),
+        critereGestionCreances: Math.round(result.criteria.dettes),
+        critereCroissance: Math.round(result.criteria.croissance),
         periodeAnalyseJours: 30,
+        moteur,
+        modelVersion,
         dateCalcul: new Date(),
       },
       update: {
         valeur: result.score,
         eligible: result.eligible,
         segment: result.segment,
-        critereRegularite: result.criteria.regularite,
-        critereVolume: result.criteria.volume,
-        critereGestionCreances: result.criteria.dettes,
-        critereCroissance: result.criteria.croissance,
+        critereRegularite: Math.round(result.criteria.regularite),
+        critereVolume: Math.round(result.criteria.volume),
+        critereGestionCreances: Math.round(result.criteria.dettes),
+        critereCroissance: Math.round(result.criteria.croissance),
+        moteur,
+        modelVersion,
         dateCalcul: new Date(),
       },
     });
@@ -153,6 +179,8 @@ export class ScoringService {
 
     const resultWithHistory: NeoScoreResult = {
       ...result,
+      engine: moteur,
+      modelVersion,
       history: historique.map((h) => ({
         month: h.periode,
         score: h.valeur,
@@ -164,7 +192,7 @@ export class ScoringService {
       ? await this.upsertOffer(travailleurId, neoscore.id, resultWithHistory)
       : null;
 
-    return { result: resultWithHistory, neoscore, offre };
+    return { result: resultWithHistory, neoscore, offre, features };
   }
 
   /** Lecture score : cache TTL, sinon recalcul sans créer d'offre. */

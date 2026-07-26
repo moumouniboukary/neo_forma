@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { CreateOperationSchema, CreateClientSchema } from "./operations.js";
+import {
+  CreateOperationSchema,
+  CreateClientSchema,
+  SettleCreanceSchema,
+} from "./operations.js";
 import { OnboardingUpdateSchema, UpdatePreferencesSchema } from "./profile.js";
 import { UpdateConsentsBatchSchema } from "./consent.js";
 import { SubmitCreditSchema } from "./credit.js";
@@ -10,8 +14,26 @@ export const SyncMutationKindSchema = z.enum([
   "update_profile",
   "update_consents",
   "submit_credit",
+  "settle_creance",
+  "create_tontine_cotisation",
 ]);
 export type SyncMutationKind = z.infer<typeof SyncMutationKindSchema>;
+
+/** Payload de règlement hors-ligne (settle_creance) — cible l'opération par son id serveur. */
+export const SettleCreanceMutationSchema = SettleCreanceSchema.extend({
+  operationId: z.string().uuid(),
+});
+export type SettleCreanceMutation = z.infer<typeof SettleCreanceMutationSchema>;
+
+/** Cotisation tontine hors-ligne — cible la tontine par son id serveur. */
+export const CreateTontineCotisationMutationSchema = z.object({
+  tontineId: z.string().uuid(),
+  montantFcfa: z.number().int().positive(),
+  note: z.string().max(200).optional(),
+});
+export type CreateTontineCotisationMutation = z.infer<
+  typeof CreateTontineCotisationMutationSchema
+>;
 
 const baseMutation = {
   clientMutationId: z.string().uuid(),
@@ -43,6 +65,16 @@ export const SyncMutationSchema = z.discriminatedUnion("kind", [
     ...baseMutation,
     kind: z.literal("submit_credit"),
     payload: SubmitCreditSchema,
+  }),
+  z.object({
+    ...baseMutation,
+    kind: z.literal("settle_creance"),
+    payload: SettleCreanceMutationSchema,
+  }),
+  z.object({
+    ...baseMutation,
+    kind: z.literal("create_tontine_cotisation"),
+    payload: CreateTontineCotisationMutationSchema,
   }),
 ]);
 export type SyncMutation = z.infer<typeof SyncMutationSchema>;

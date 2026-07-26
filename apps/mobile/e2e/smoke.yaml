@@ -1,0 +1,12 @@
+# Maestro E2E — parcours smoke NeoForma (device / émulateur).
+# Prérequis : Maestro CLI (https://maestro.mobile.dev)
+#   maestro test apps/mobile/e2e/
+appId: bf.neoforma.neoforma
+---
+- launchApp
+- assertVisible: "NeoForma"
+- extendedWaitUntil:
+    visible: "Connexion"
+    timeout: 15000
+- tapOn: "Connexion"
+- assertVisible: "Téléphone"

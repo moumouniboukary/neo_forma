@@ -1,0 +1,15 @@
+# Maestro — inscription (OTP mode test / devCode affiché).
+# Adapter le numéro à chaque run.
+appId: bf.neoforma.neoforma
+---
+- launchApp
+- extendedWaitUntil:
+    visible:
+      text: ".*Inscription|Nouveau compte|Connexion.*"
+    timeout: 20000
+- tapOn:
+    text: ".*Inscription|Nouveau compte.*"
+    optional: true
+- assertVisible:
+    text: ".*Téléphone|Phone.*"
+    optional: true

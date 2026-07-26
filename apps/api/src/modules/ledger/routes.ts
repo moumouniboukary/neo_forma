@@ -1,8 +1,10 @@
-import type { FastifyPluginAsync, FastifyReply } from "fastify";
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import {
   CreateClientSchema,
   CreateOperationSchema,
+  SettleCreanceSchema,
   UpdateClientSchema,
+  UpdateDueDateSchema,
 } from "@neoforma/shared";
 import { toClient, toOperation } from "../../lib/mappers.js";
 import { isLedgerError, LedgerService } from "./service.js";
@@ -50,20 +52,75 @@ export const ledgerOperationRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
-  /** POST /operations/:id/settle — régler une créance (RM-O05) */
+  /** POST /operations/:id/settle — régler une créance, total ou partiel (RM-O05) */
   app.post(
     "/:id/settle",
     { preHandler: [app.authenticate] },
     async (request, reply) => {
       const { id } = request.params as { id: string };
+      const parsed = SettleCreanceSchema.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: "validation",
+          message: "Règlement invalide",
+          details: parsed.error.flatten(),
+        });
+      }
       try {
-        const op = await ledger.settleCreance(request.user.sub, id);
+        const op = await ledger.settleCreance(
+          request.user.sub,
+          id,
+          parsed.data.amountFcfa
+        );
         return toOperation(op);
       } catch (err) {
         return sendLedgerError(reply, err);
       }
     }
   );
+
+  /** POST /operations/:id/remind — relancer un client (SMS + notif in-app) */
+  app.post(
+    "/:id/remind",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        const op = await ledger.remindCreance(request.user.sub, id);
+        return toOperation(op);
+      } catch (err) {
+        return sendLedgerError(reply, err);
+      }
+    }
+  );
+
+  /** PATCH /operations/:id/due-date — changer l'échéance d'une créance */
+  const handleUpdateDueDate = async (
+    request: FastifyRequest,
+    reply: FastifyReply
+  ) => {
+    const { id } = request.params as { id: string };
+    const parsed = UpdateDueDateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: "validation",
+        message: "Échéance invalide",
+        details: parsed.error.flatten(),
+      });
+    }
+    try {
+      const op = await ledger.updateDueDate(
+        request.user.sub,
+        id,
+        parsed.data.dueAt
+      );
+      return toOperation(op);
+    } catch (err) {
+      return sendLedgerError(reply, err);
+    }
+  };
+  app.patch("/:id/due-date", { preHandler: [app.authenticate] }, handleUpdateDueDate);
+  app.patch("/:id/due", { preHandler: [app.authenticate] }, handleUpdateDueDate);
 };
 
 export const ledgerClientRoutes: FastifyPluginAsync = async (app) => {

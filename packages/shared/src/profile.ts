@@ -38,10 +38,14 @@ export const ProfilActiviteSchema = z.object({
 });
 export type ProfilActiviteDto = z.infer<typeof ProfilActiviteSchema>;
 
+export const ThemeSchema = z.enum(["light", "dark"]);
+export type ThemePreference = z.infer<typeof ThemeSchema>;
+
 export const PreferencesSchema = z.object({
   language: LanguageSchema,
   modeIconographique: z.boolean(),
   assistanceVocaleActive: z.boolean(),
+  theme: ThemeSchema.default("dark"),
   fuseau: z.string().min(1).max(64),
 });
 export type PreferencesDto = z.infer<typeof PreferencesSchema>;
@@ -59,6 +63,7 @@ export const UpdatePreferencesSchema = z.object({
   language: LanguageSchema.optional(),
   modeIconographique: z.boolean().optional(),
   assistanceVocaleActive: z.boolean().optional(),
+  theme: ThemeSchema.optional(),
   fuseau: z.string().min(1).max(64).optional(),
 });
 export type UpdatePreferences = z.infer<typeof UpdatePreferencesSchema>;

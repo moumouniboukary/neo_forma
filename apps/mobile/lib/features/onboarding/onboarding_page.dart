@@ -23,6 +23,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   String anciennete = '3_5';
   String caJour = '15_30k';
   bool tontine = true;
+  final tontineCotisCtrl = TextEditingController(text: '5000');
   String mobileMoney = 'regulier';
   bool shareImf = true;
   String language = 'fr';
@@ -51,6 +52,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   @override
   void dispose() {
     nameCtrl.dispose();
+    tontineCotisCtrl.dispose();
     super.dispose();
   }
 
@@ -71,6 +73,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           'anciennete': anciennete,
           'caJour': caJour,
           'tontine': tontine,
+          if (tontine)
+            'tontineCotis':
+                int.tryParse(tontineCotisCtrl.text.replaceAll(RegExp(r'\s'), '')) ??
+                    0,
           'mobileMoney': mobileMoney,
           'city': 'Ouagadougou',
           'language': language,
@@ -139,7 +145,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             padding: const EdgeInsets.all(24),
             children: [
               Text(
-                'NeoForma',
+                NfTokens.appName,
                 style: Theme.of(context).textTheme.titleLarge?.copyWith(
                   color: NfTokens.brand,
                   fontWeight: FontWeight.w800,
@@ -152,7 +158,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               ),
               Text(
                 'Étape ${step + 1} / 3 — alimente ton NeoScore',
-                style: const TextStyle(color: NfTokens.textMute),
+                style: TextStyle(color: NfTokens.textMute),
               ),
               const SizedBox(height: 20),
               if (step == 0) ...[
@@ -161,10 +167,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   decoration: const InputDecoration(labelText: 'Prénom / nom'),
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Métier',
-                  style: TextStyle(color: NfTokens.textMute),
-                ),
+                Text('Métier', style: TextStyle(color: NfTokens.textMute)),
                 const SizedBox(height: 8),
                 NfSegmented(
                   value: metier,
@@ -177,10 +180,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                const Text(
-                  'Ancienneté',
-                  style: TextStyle(color: NfTokens.textMute),
-                ),
+                Text('Ancienneté', style: TextStyle(color: NfTokens.textMute)),
                 const SizedBox(height: 8),
                 NfSegmented(
                   value: anciennete,
@@ -192,7 +192,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   ],
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Chiffre d’affaires journalier',
                   style: TextStyle(color: NfTokens.textMute),
                 ),
@@ -212,7 +212,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   onPressed: () => setState(() => step = 1),
                 ),
               ] else if (step == 1) ...[
-                const Text(
+                Text(
                   'Tontine',
                   style: TextStyle(color: NfTokens.textMute),
                 ),
@@ -222,8 +222,18 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   onChanged: (v) => setState(() => tontine = v == 'oui'),
                   options: const [('oui', 'Oui'), ('non', 'Non')],
                 ),
+                if (tontine) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: tontineCotisCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Cotisation tontine (FCFA)',
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Argent mobile',
                   style: TextStyle(color: NfTokens.textMute),
                 ),
@@ -240,19 +250,19 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                 const SizedBox(height: 24),
                 TextButton(
                   onPressed: () => setState(() => step = 0),
-                  child: const Text('Retour'),
+                  child: Text('Retour'),
                 ),
                 NfPrimaryButton(
                   label: 'Suivant',
                   onPressed: () => setState(() => step = 2),
                 ),
               ] else ...[
-                const Text(
+                Text(
                   'Tes données construisent ton NeoScore. Tu contrôles le partage avec les institutions de microfinance (IMF).',
                   style: TextStyle(color: NfTokens.textMute),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Langue',
                   style: TextStyle(color: NfTokens.textMute),
                 ),
@@ -263,12 +273,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   options: NfStrings.selectableLanguages,
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Mode icônes',
                   style: TextStyle(color: NfTokens.textMute),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Boutons plus grands, moins de texte — utile si on lit peu',
                   style: TextStyle(color: NfTokens.textMute, fontSize: 13),
                 ),
@@ -279,12 +289,12 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   options: const [('oui', 'Oui'), ('non', 'Non')],
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Assistance vocale',
                   style: TextStyle(color: NfTokens.textMute),
                 ),
                 const SizedBox(height: 4),
-                const Text(
+                Text(
                   'Écouter les libellés avec le bouton haut-parleur — utile en mooré',
                   style: TextStyle(color: NfTokens.textMute, fontSize: 13),
                 ),
@@ -295,7 +305,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                   options: const [('oui', 'Oui'), ('non', 'Non')],
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Partage IMF',
                   style: TextStyle(color: NfTokens.textMute),
                 ),

@@ -211,7 +211,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text(
+                Text(
                   'Langue',
                   style: TextStyle(color: NfTokens.textMute),
                 ),
@@ -413,7 +413,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 12),
-                const Text(
+                Text(
                   'Reconnectez-vous avec votre nouveau code.',
                   style: TextStyle(color: NfTokens.textMute),
                 ),
@@ -429,7 +429,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                   decoration: const InputDecoration(labelText: 'Téléphone'),
                 ),
                 if (error != null)
-                  Text(error!, style: const TextStyle(color: NfTokens.danger)),
+                  Text(error!, style: TextStyle(color: NfTokens.danger)),
                 const SizedBox(height: 16),
                 NfPrimaryButton(
                   label: 'Recevoir un code',
@@ -438,7 +438,7 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
                 ),
               ] else if (step == 1) ...[
                 if (info != null)
-                  Text(info!, style: const TextStyle(color: NfTokens.textMute)),
+                  Text(info!, style: TextStyle(color: NfTokens.textMute)),
                 TextField(
                   controller: otpCtrl,
                   keyboardType: TextInputType.number,

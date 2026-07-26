@@ -80,21 +80,36 @@ class VoiceService {
     await speakText(text, assetKey: key);
   }
 
+  /// Ordre de repli des dossiers audio pour une langue donnée : la langue
+  /// elle-même, puis mooré (langue la mieux couverte en audio), puis fr.
+  List<String> _assetFallbackChain(String language) {
+    if (language == 'fr') return const ['fr'];
+    if (language == 'mr') return const ['mr', 'fr'];
+    return [language, 'mr', 'fr'];
+  }
+
   Future<void> speakText(String text, {String? assetKey}) async {
     final trimmed = text.trim();
     if (trimmed.isEmpty) return;
     if (_busy) await stop();
     _busy = true;
     try {
-      if (assetKey != null && await _playAsset(lang, assetKey)) {
-        return;
+      if (assetKey != null) {
+        for (final candidate in _assetFallbackChain(lang)) {
+          if (await _playAsset(candidate, assetKey)) return;
+        }
       }
-      if (lang != 'fr' &&
-          assetKey != null &&
-          await _playAsset('fr', assetKey)) {
-        return;
+      // Aucun audio disponible : on ne force jamais une TTS française sur un
+      // texte en mooré/dioula/fulfuldé (résultat incompréhensible). On ne
+      // parle en TTS que si le texte est déjà en français.
+      if (lang == 'fr') {
+        await _speakTts(trimmed);
+      } else if (assetKey != null) {
+        final fallbackText = NfStrings('fr').get(assetKey);
+        if (fallbackText.trim().isNotEmpty) {
+          await _speakTts(fallbackText);
+        }
       }
-      await _speakTts(trimmed);
     } catch (e) {
       debugPrint('VoiceService: $e');
     } finally {

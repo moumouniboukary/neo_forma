@@ -22,6 +22,9 @@ export const NeoScoreResultSchema = z.object({
     })
   ),
   computedAt: z.string().datetime(),
+  /** heuristic (défaut) | ml */
+  engine: z.enum(["heuristic", "ml"]).optional().default("heuristic"),
+  modelVersion: z.string().nullable().optional(),
 });
 export type NeoScoreResult = z.infer<typeof NeoScoreResultSchema>;
 

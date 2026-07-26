@@ -44,13 +44,14 @@ type AuthState = {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-function normalizeUser(user: AuthTokensResponse["user"]): StoredUser {
+function normalizeUser(user: AuthTokensResponse["user"] & { theme?: string }): StoredUser {
   return {
     id: user.id,
     phone: user.phone,
     displayName: user.displayName,
     onboardingCompleted: Boolean(user.onboardingCompleted),
     language: user.language,
+    theme: user.theme === "light" ? "light" : user.theme === "dark" ? "dark" : undefined,
     statutCompte: user.statutCompte,
   };
 }

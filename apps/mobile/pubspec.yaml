@@ -25,6 +25,9 @@ dependencies:
   flutter_tts: ^4.2.5
   audioplayers: ^6.8.1
   speech_to_text: ^7.0.0
+  share_plus: ^11.0.0
+  local_auth: ^2.3.0
+  flutter_local_notifications: ^18.0.1
 
 dev_dependencies:
   flutter_test:
@@ -37,3 +40,5 @@ flutter:
     - assets/audio/
     - assets/audio/fr/
     - assets/audio/mr/
+    - assets/audio/dl/
+    - assets/audio/ff/

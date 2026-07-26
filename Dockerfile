@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
+COPY apps/worker/package.json apps/worker/
 COPY packages/shared/package.json packages/shared/
 COPY packages/neoscore/package.json packages/neoscore/
 RUN npm install
@@ -19,6 +20,16 @@ ENV NODE_ENV=production
 EXPOSE 3001
 # Migre puis démarre (voir docker-entrypoint.sh)
 CMD ["./docker-entrypoint.sh"]
+
+# Worker async — SMS / alertes / Mobile Money (file Redis neoforma:jobs)
+FROM deps AS worker
+WORKDIR /app
+COPY packages ./packages
+COPY apps/api ./apps/api
+COPY apps/worker ./apps/worker
+WORKDIR /app/apps/worker
+ENV NODE_ENV=production
+CMD ["npx", "tsx", "src/main.ts"]
 
 FROM deps AS web-build
 ARG VITE_API_URL=

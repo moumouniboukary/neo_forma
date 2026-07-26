@@ -87,6 +87,8 @@ export function computeNeoScore(
     criteria,
     history,
     computedAt: now,
+    engine: "heuristic",
+    modelVersion: null,
   };
 }
 

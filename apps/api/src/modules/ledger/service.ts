@@ -10,6 +10,8 @@ import type {
   UpdateClient,
 } from "@neoforma/shared";
 import { toCanonicalOperationType } from "@neoforma/shared";
+import { createNotification } from "../../lib/notifications.js";
+import { smsGateway } from "../../lib/sms.js";
 
 export class LedgerError extends Error {
   constructor(
@@ -28,7 +30,13 @@ export function isLedgerError(err: unknown): err is LedgerError {
 
 export type OperationWithClient = Operation & {
   client: ClientInformel | null;
+  articleStock?: { nom: string } | null;
 };
+
+const operationInclude = {
+  client: true,
+  articleStock: { select: { nom: true } },
+} as const;
 
 function resolveCreanceStatut(
   echeance: Date | null | undefined,
@@ -119,7 +127,7 @@ export class LedgerService {
         travailleurId,
         ...(type ? { type } : {}),
       },
-      include: { client: true },
+      include: operationInclude,
       orderBy: { dateOperation: "desc" },
       take: Math.min(opts.limit ?? 50, 200),
     });
@@ -138,7 +146,7 @@ export class LedgerService {
     if (input.clientMutationId) {
       const existing = await this.prisma.operation.findUnique({
         where: { identifiantIdempotence: input.clientMutationId },
-        include: { client: true },
+        include: operationInclude,
       });
       if (existing) return existing;
     }
@@ -167,6 +175,30 @@ export class LedgerService {
       );
     }
 
+    let articleStockId: string | null = null;
+    const natureStock = type === "stock" ? (input.natureStock ?? "entree") : null;
+    const nomArticle = (input.productName ?? input.articleName)?.trim();
+    const quantiteInput = input.quantiteStock ?? input.quantity;
+    if (type === "stock" && input.articleStockId) {
+      const quantite = quantiteInput ?? 1;
+      const delta = natureStock === "sortie" ? -quantite : quantite;
+      const article = await this.adjustArticleQuantity(
+        travailleurId,
+        input.articleStockId,
+        delta
+      );
+      articleStockId = article.id;
+    } else if (type === "stock" && nomArticle) {
+      const quantite = quantiteInput ?? 1;
+      const delta = natureStock === "sortie" ? -quantite : quantite;
+      const article = await this.upsertArticleQuantity(
+        travailleurId,
+        nomArticle,
+        delta
+      );
+      articleStockId = article.id;
+    }
+
     const echeance = input.dueAt ? new Date(input.dueAt) : null;
     const data: Prisma.OperationCreateInput = {
       type,
@@ -175,7 +207,8 @@ export class LedgerService {
       dateOperation,
       statutSync: "synchronisee",
       identifiantIdempotence: input.clientMutationId ?? null,
-      natureStock: type === "stock" ? (input.natureStock ?? "entree") : null,
+      natureStock,
+      quantiteStock: type === "stock" ? (quantiteInput ?? null) : null,
       categorieDepense: type === "depense" ? input.categorieDepense ?? null : null,
       canal: input.canal ?? null,
       echeance: type === "creance" ? echeance : null,
@@ -183,22 +216,66 @@ export class LedgerService {
         type === "creance" ? resolveCreanceStatut(echeance) : null,
       travailleur: { connect: { id: travailleurId } },
       ...(clientId ? { client: { connect: { id: clientId } } } : {}),
+      ...(articleStockId ? { articleStock: { connect: { id: articleStockId } } } : {}),
     };
 
     return this.prisma.operation.create({
       data,
-      include: { client: true },
+      include: operationInclude,
     });
   }
 
-  /** RM-O05 — règlement créance. */
+  /** Crée l'article s'il n'existe pas, sinon ajuste la quantité (+/-). */
+  private async upsertArticleQuantity(
+    travailleurId: string,
+    nom: string,
+    delta: number
+  ) {
+    const existing = await this.prisma.articleStock.findUnique({
+      where: { travailleurId_nom: { travailleurId, nom } },
+    });
+    if (existing) {
+      return this.prisma.articleStock.update({
+        where: { id: existing.id },
+        data: { quantite: Math.max(0, existing.quantite + delta) },
+      });
+    }
+    return this.prisma.articleStock.create({
+      data: { travailleurId, nom, quantite: Math.max(0, delta) },
+    });
+  }
+
+  /** Ajuste la quantité d'un article existant référencé par id (RM-simplicité — articleStockId direct). */
+  private async adjustArticleQuantity(
+    travailleurId: string,
+    articleStockId: string,
+    delta: number
+  ) {
+    const existing = await this.prisma.articleStock.findFirst({
+      where: { id: articleStockId, travailleurId },
+    });
+    if (!existing) {
+      throw new LedgerError("not_found", "Article stock introuvable", 404);
+    }
+    return this.prisma.articleStock.update({
+      where: { id: existing.id },
+      data: { quantite: Math.max(0, existing.quantite + delta) },
+    });
+  }
+
+  /**
+   * RM-O05 — règlement créance (total ou partiel).
+   * `amountFcfa` optionnel : si fourni et < solde restant, règlement partiel
+   * (la créance reste ouverte/en_retard) ; sinon règlement total.
+   */
   async settleCreance(
     travailleurId: string,
-    operationId: string
+    operationId: string,
+    amountFcfa?: number
   ): Promise<OperationWithClient> {
     const op = await this.prisma.operation.findFirst({
       where: { id: operationId, travailleurId },
-      include: { client: true },
+      include: operationInclude,
     });
     if (!op) {
       throw new LedgerError("not_found", "Opération introuvable", 404);
@@ -213,13 +290,106 @@ export class LedgerService {
       throw new LedgerError("validation", "Créance annulée — règlement impossible", 400);
     }
 
+    const solde = op.montantFcfa - op.montantRegleFcfa;
+    if (amountFcfa !== undefined && amountFcfa < solde) {
+      const montantRegleFcfa = op.montantRegleFcfa + amountFcfa;
+      return this.prisma.operation.update({
+        where: { id: operationId },
+        data: { montantRegleFcfa },
+        include: operationInclude,
+      });
+    }
+
     return this.prisma.operation.update({
       where: { id: operationId },
       data: {
         statutCreance: "reglee",
         dateReglement: new Date(),
+        montantRegleFcfa: op.montantFcfa,
       },
-      include: { client: true },
+      include: operationInclude,
+    });
+  }
+
+  /** Relance client pour une créance ouverte — SMS (si téléphone) + notif in-app. */
+  async remindCreance(
+    travailleurId: string,
+    operationId: string
+  ): Promise<OperationWithClient> {
+    const op = await this.prisma.operation.findFirst({
+      where: { id: operationId, travailleurId },
+      include: operationInclude,
+    });
+    if (!op) {
+      throw new LedgerError("not_found", "Opération introuvable", 404);
+    }
+    if (op.type !== "creance") {
+      throw new LedgerError("validation", "Seule une créance peut être relancée", 400);
+    }
+    if (op.statutCreance === "reglee" || op.statutCreance === "annulee") {
+      throw new LedgerError("validation", "Créance déjà close", 400);
+    }
+
+    const solde = op.montantFcfa - op.montantRegleFcfa;
+    if (op.client?.telephone) {
+      try {
+        await smsGateway.send({
+          to: op.client.telephone,
+          body: `NeoForma : rappel — vous devez ${solde} FCFA${
+            op.libelle ? ` (${op.libelle})` : ""
+          }. Merci de régulariser.`,
+        });
+      } catch {
+        // Best effort — la relance in-app reste enregistrée.
+      }
+    }
+
+    await createNotification(this.prisma, {
+      travailleurId,
+      type: "creance_relance",
+      titre: "Relance envoyée",
+      corps: `${op.client?.nom ?? "Client"} — ${solde} FCFA relancé(e)`,
+      meta: { operationId: op.id },
+    });
+
+    return this.prisma.operation.update({
+      where: { id: operationId },
+      data: { derniereRelanceAt: new Date() },
+      include: operationInclude,
+    });
+  }
+
+  /** Modifie l'échéance d'une créance et recalcule son statut. */
+  async updateDueDate(
+    travailleurId: string,
+    operationId: string,
+    dueAt: string
+  ): Promise<OperationWithClient> {
+    const op = await this.prisma.operation.findFirst({
+      where: { id: operationId, travailleurId },
+      include: operationInclude,
+    });
+    if (!op) {
+      throw new LedgerError("not_found", "Opération introuvable", 404);
+    }
+    if (op.type !== "creance") {
+      throw new LedgerError("validation", "Seule une créance a une échéance", 400);
+    }
+    if (op.statutCreance === "reglee" || op.statutCreance === "annulee") {
+      throw new LedgerError("validation", "Créance close — échéance non modifiable", 400);
+    }
+    const echeance = new Date(dueAt);
+    if (Number.isNaN(echeance.getTime())) {
+      throw new LedgerError("validation", "Échéance invalide", 400);
+    }
+
+    return this.prisma.operation.update({
+      where: { id: operationId },
+      data: {
+        echeance,
+        statutCreance: resolveCreanceStatut(echeance),
+      },
+      include: operationInclude,
     });
   }
 

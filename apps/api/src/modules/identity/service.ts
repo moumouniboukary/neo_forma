@@ -11,6 +11,7 @@ import {
 } from "./crypto.js";
 import { IdentityError } from "./errors.js";
 import { isSmsConfigured, smsGateway } from "../../lib/sms.js";
+import { enqueueOrRun } from "../../lib/jobs.js";
 
 export type OtpRequestResult = {
   ok: true;
@@ -120,7 +121,11 @@ export class IdentityService {
 
     const smsBody = `NeoForma : votre code est ${code}. Valable quelques minutes.`;
     try {
-      await smsGateway.send({ to: telephone, body: smsBody });
+      await enqueueOrRun(
+        "sms",
+        { to: telephone, body: smsBody },
+        () => smsGateway.send({ to: telephone, body: smsBody })
+      );
     } catch (err) {
       console.error("[sms] envoi échoué", err);
       if (process.env.NODE_ENV === "production") {

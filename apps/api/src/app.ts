@@ -25,6 +25,14 @@ import { syncRoutes } from "./modules/sync/routes.js";
 import { dashboardRoutes } from "./modules/dashboard/routes.js";
 import { partnersRoutes } from "./modules/partners/routes.js";
 import { koboRoutes } from "./modules/kobo/routes.js";
+import { mobileMoneyRoutes } from "./modules/mobile-money/routes.js";
+import { adminRoutes } from "./modules/admin/routes.js";
+import { brandingRoutes } from "./modules/branding/routes.js";
+import { stockRoutes } from "./modules/stock/routes.js";
+import { tontineRoutes } from "./modules/tontine/routes.js";
+import { notificationsRoutes } from "./modules/notifications/routes.js";
+import { passportRoutes } from "./modules/passport/routes.js";
+import { ussdRoutes } from "./modules/ussd/routes.js";
 
 const INFRA_PATHS = new Set(["/health", "/ready", "/metrics"]);
 
@@ -209,6 +217,15 @@ export async function buildApp() {
   await app.register(creditRoutes, { prefix: "/credit" });
   await app.register(partnersRoutes, { prefix: "/partners" });
   await app.register(koboRoutes, { prefix: "/kobo" });
+  await app.register(mobileMoneyRoutes, { prefix: "/mobile-money" });
+  await app.register(adminRoutes, { prefix: "/admin" });
+  await app.register(brandingRoutes, { prefix: "/branding" });
+  await app.register(stockRoutes, { prefix: "/stock" });
+  await app.register(tontineRoutes, { prefix: "/tontine" });
+  await app.register(tontineRoutes, { prefix: "/tontines" });
+  await app.register(notificationsRoutes, { prefix: "/notifications" });
+  await app.register(passportRoutes, { prefix: "/me" });
+  await app.register(ussdRoutes, { prefix: "/ussd" });
 
   return app;
 }

@@ -1,4 +1,4 @@
-# Render Blueprint — API NeoForma + Postgres + Redis (Key Value).
+# Render Blueprint — API NeoForma + Postgres + Redis + ML solvabilité.
 # https://render.com → New → Blueprint → pointer sur ce repo.
 databases:
   - name: neoforma-db
@@ -13,6 +13,17 @@ services:
     maxmemoryPolicy: allkeys-lru
     # Accès interne uniquement (API sur le même compte Render).
     ipAllowList: []
+
+  - type: web
+    name: neoforma-ml
+    runtime: docker
+    plan: free
+    dockerfilePath: ./services/neoscore/Dockerfile
+    dockerContext: ./services/neoscore
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
 
   - type: web
     name: neoforma-api
@@ -41,6 +52,13 @@ services:
       # À renseigner dans le dashboard Render :
       - key: CORS_ORIGIN
         sync: false
+      # Après le 1er deploy ML : https://neoforma-ml-xxxx.onrender.com
+      - key: SCORING_ML_URL
+        sync: false
+      - key: SCORING_ML_TIMEOUT_MS
+        value: "8000"
+      - key: ADMIN_API_KEY
+        sync: false
       - key: TWILIO_ACCOUNT_SID
         sync: false
       - key: TWILIO_AUTH_TOKEN
@@ -54,4 +72,22 @@ services:
       - key: PARTNER_API_KEY
         sync: false
       - key: KOBO_API_KEY
+        sync: false
+      - key: ORANGE_MM_URL
+        sync: false
+      - key: ORANGE_MM_API_KEY
+        sync: false
+      - key: MOOV_MM_URL
+        sync: false
+      - key: MOOV_MM_API_KEY
+        sync: false
+      - key: BRAND_APP_NAME
+        sync: false
+      - key: BRAND_PRIMARY_COLOR
+        sync: false
+      - key: BRAND_SECONDARY_COLOR
+        sync: false
+      - key: BRAND_LOGO_URL
+        sync: false
+      - key: BRAND_SUPPORT_PHONE
         sync: false

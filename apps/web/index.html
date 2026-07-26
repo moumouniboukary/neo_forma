@@ -11,6 +11,16 @@
     <meta name="apple-mobile-web-app-title" content="NeoForma" />
     <link rel="apple-touch-icon" href="/brand/logo-mark.png" />
     <title>NeoForma</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("nf-theme");
+          document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+        } catch (e) {
+          document.documentElement.dataset.theme = "dark";
+        }
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

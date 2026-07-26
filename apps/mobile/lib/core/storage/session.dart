@@ -9,6 +9,7 @@ class StoredUser {
     required this.displayName,
     required this.onboardingCompleted,
     this.language,
+    this.theme,
     this.statutCompte,
   });
 
@@ -17,6 +18,7 @@ class StoredUser {
   final String displayName;
   final bool onboardingCompleted;
   final String? language;
+  final String? theme;
   final String? statutCompte;
 
   factory StoredUser.fromJson(Map<String, dynamic> json) {
@@ -27,6 +29,7 @@ class StoredUser {
       onboardingCompleted: json['onboardingCompleted'] == true ||
           json['onboardingTermine'] == true,
       language: json['language'] as String?,
+      theme: json['theme'] as String?,
       statutCompte: json['statutCompte'] as String?,
     );
   }
@@ -37,6 +40,7 @@ class StoredUser {
         'displayName': displayName,
         'onboardingCompleted': onboardingCompleted,
         'language': language,
+        'theme': theme,
         'statutCompte': statutCompte,
       };
 
@@ -44,6 +48,7 @@ class StoredUser {
     String? displayName,
     bool? onboardingCompleted,
     String? language,
+    String? theme,
     String? statutCompte,
   }) {
     return StoredUser(
@@ -52,6 +57,7 @@ class StoredUser {
       displayName: displayName ?? this.displayName,
       onboardingCompleted: onboardingCompleted ?? this.onboardingCompleted,
       language: language ?? this.language,
+      theme: theme ?? this.theme,
       statutCompte: statutCompte ?? this.statutCompte,
     );
   }

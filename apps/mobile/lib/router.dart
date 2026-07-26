@@ -2,13 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'features/auth/app_lock.dart';
 import 'features/auth/auth_provider.dart';
 import 'features/auth/register_forgot.dart';
 import 'features/auth/splash_login.dart';
 import 'features/home/shell_dashboard.dart';
 import 'features/ledger/ledger_pages.dart';
+import 'features/notifications/notifications_page.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/score_credit_profile.dart';
+import 'features/stock/stock_page.dart';
+import 'features/tontine/tontine_page.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 final _shellKey = GlobalKey<NavigatorState>();
@@ -58,7 +62,8 @@ GoRouter createRouter(Ref ref) {
       ),
       ShellRoute(
         navigatorKey: _shellKey,
-        builder: (context, state, child) => AppShell(child: child),
+        builder: (context, state, child) =>
+            AppLockGate(child: AppShell(child: child)),
         routes: [
           GoRoute(
             path: '/app',
@@ -93,6 +98,21 @@ GoRouter createRouter(Ref ref) {
         path: '/app/credit',
         parentNavigatorKey: _rootKey,
         builder: (context, state) => const CreditPage(),
+      ),
+      GoRoute(
+        path: '/app/stock',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const StockPage(),
+      ),
+      GoRoute(
+        path: '/app/tontine',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const TontinePage(),
+      ),
+      GoRoute(
+        path: '/app/notifications',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const NotificationsPage(),
       ),
     ],
   );

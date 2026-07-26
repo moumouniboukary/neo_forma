@@ -12,29 +12,48 @@ class NfBrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final logoUrl = NfTokens.logoUrl;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         FittedBox(
           fit: BoxFit.scaleDown,
           alignment: Alignment.centerLeft,
-          child: Text(
-            'NeoForma',
-            maxLines: 1,
-            softWrap: false,
-            style: GoogleFonts.syne(
-              fontSize: fontSize,
-              fontWeight: FontWeight.w800,
-              color: NfTokens.brand,
-              height: 1.05,
-              letterSpacing: -0.5,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (logoUrl != null && logoUrl.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    logoUrl,
+                    width: fontSize,
+                    height: fontSize,
+                    errorBuilder: (context, error, stackTrace) =>
+                        const SizedBox.shrink(),
+                  ),
+                ),
+                const SizedBox(width: 10),
+              ],
+              Text(
+                NfTokens.appName,
+                maxLines: 1,
+                softWrap: false,
+                style: GoogleFonts.syne(
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w800,
+                  color: NfTokens.brand,
+                  height: 1.05,
+                  letterSpacing: -0.5,
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 8),
         Text(
           tagline,
-          style: const TextStyle(color: NfTokens.textMute, height: 1.4),
+          style: TextStyle(color: NfTokens.textMute, height: 1.4),
         ),
       ],
     );

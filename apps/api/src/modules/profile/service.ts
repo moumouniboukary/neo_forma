@@ -71,6 +71,7 @@ export class ProfileService {
         langue,
         modeIconographique: false,
         assistanceVocaleActive: false,
+        theme: "dark",
         fuseau: "Africa/Ouagadougou",
       },
       update: {},
@@ -115,6 +116,7 @@ export class ProfileService {
         ...(input.assistanceVocaleActive !== undefined
           ? { assistanceVocaleActive: input.assistanceVocaleActive }
           : {}),
+        ...(input.theme !== undefined ? { theme: input.theme } : {}),
         ...(input.fuseau !== undefined ? { fuseau: input.fuseau } : {}),
       },
     });

@@ -74,6 +74,17 @@ Sans `android/key.properties`, le build release retombe sur la signature **debug
 
 E2E device (Maestro) : `npm run mobile:e2e` — voir `apps/mobile/e2e/`.
 
+## NeoScore ML (solvabilité)
+
+Pipeline optionnel : service Python + labels remboursement. Voir [`ml-scoring.md`](ml-scoring.md).
+
+```bash
+cd services/neoscore && uvicorn main:app --port 8000
+# apps/api/.env → SCORING_ML_URL=http://localhost:8000
+```
+
+Sur Render : déployer `services/neoscore/Dockerfile`, puis renseigner `SCORING_ML_URL` sur `neoforma-api`.
+
 ## Santé & métriques
 
 | Endpoint | Rôle |

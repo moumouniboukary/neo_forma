@@ -21,12 +21,24 @@ export const OperationSchema = z.object({
   clientId: z.string().uuid().optional(),
   clientName: z.string().max(120).optional(),
   natureStock: NatureStockSchema.optional(),
+  articleName: z.string().max(120).optional(),
+  quantity: z.number().int().positive().optional(),
+  /** Alias explicite de articleName — id de l'article stock lié. */
+  articleStockId: z.string().uuid().optional(),
+  /** Alias explicite de quantity. */
+  quantiteStock: z.number().int().positive().optional(),
   categorieDepense: z.string().max(80).optional(),
   dueAt: z.string().datetime().optional(),
   settledAt: z.string().datetime().nullable().optional(),
   statutCreance: StatutCreanceSchema.optional(),
   statutSync: z.enum(["locale", "synchronisee", "en_conflit"]).optional(),
   canal: z.enum(["especes", "mobile_money"]).optional(),
+  amountSettledFcfa: z.number().int().nonnegative().optional(),
+  /** Alias explicite de amountSettledFcfa (montant déjà encaissé). */
+  montantRegleFcfa: z.number().int().nonnegative().optional(),
+  /** Solde restant à encaisser (amountFcfa - montantRegleFcfa). */
+  remainingFcfa: z.number().int().nonnegative().optional(),
+  remindedAt: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime(),
   dateOperation: z.string().datetime().optional(),
   clientMutationId: z.string().uuid().optional(),
@@ -42,6 +54,14 @@ export const CreateOperationSchema = z
     clientId: z.string().uuid().optional(),
     clientName: z.string().max(120).optional(),
     natureStock: NatureStockSchema.optional(),
+    articleName: z.string().max(120).optional(),
+    quantity: z.number().int().positive().optional(),
+    /** Référence directe à un article existant (prioritaire sur articleName/productName). */
+    articleStockId: z.string().uuid().optional(),
+    /** Alias explicite de quantity. */
+    quantiteStock: z.number().int().positive().optional(),
+    /** Alias explicite de articleName (nouvel article ou upsert par nom). */
+    productName: z.string().max(120).optional(),
     categorieDepense: z.string().max(80).optional(),
     /** Canal de paiement : especes | mobile_money */
     canal: z.enum(["especes", "mobile_money"]).optional(),
@@ -61,6 +81,16 @@ export const CreateOperationSchema = z
     }
   });
 export type CreateOperation = z.infer<typeof CreateOperationSchema>;
+
+export const SettleCreanceSchema = z.object({
+  amountFcfa: z.number().int().positive().optional(),
+});
+export type SettleCreanceInput = z.infer<typeof SettleCreanceSchema>;
+
+export const UpdateDueDateSchema = z.object({
+  dueAt: z.string().datetime(),
+});
+export type UpdateDueDateInput = z.infer<typeof UpdateDueDateSchema>;
 
 export const ClientInformelSchema = z.object({
   id: z.string().uuid(),

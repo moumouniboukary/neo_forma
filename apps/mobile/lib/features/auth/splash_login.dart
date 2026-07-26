@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/api/client.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/nf_widgets.dart';
+import 'app_lock.dart';
 import 'auth_provider.dart';
 
 /// Page d'accueil publique (avant connexion).
@@ -19,14 +20,15 @@ class SplashPage extends ConsumerWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final gradientColors = <Color>[NfTokens.bgMid, NfTokens.bg, NfTokens.card2];
     return Scaffold(
       body: Container(
         width: double.infinity,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [NfTokens.bgMid, NfTokens.bg, Color(0xFF04110C)],
+            colors: gradientColors,
           ),
         ),
         child: SafeArea(
@@ -53,7 +55,7 @@ class SplashPage extends ConsumerWidget {
                             ),
                       ),
                       const SizedBox(height: 12),
-                      const Text(
+                      Text(
                         'Enregistrez ventes et créances, construisez votre NeoScore, accédez au microcrédit.',
                         style: TextStyle(
                           color: NfTokens.textMute,
@@ -140,11 +142,11 @@ class _HomeFeature extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(title, style: TextStyle(fontWeight: FontWeight.w700)),
               const SizedBox(height: 2),
               Text(
                 subtitle,
-                style: const TextStyle(
+                style: TextStyle(
                   color: NfTokens.textMute,
                   fontSize: 13,
                   height: 1.35,
@@ -242,6 +244,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             pin: pinCtrl.text.trim(),
             otpToken: otpToken!,
           );
+      await ref.read(appLockProvider.notifier).setupPin(pinCtrl.text.trim());
       if (!mounted) return;
       context.go('/app');
     } on ApiException catch (e) {

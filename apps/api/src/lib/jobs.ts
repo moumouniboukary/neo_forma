@@ -1,6 +1,6 @@
 import { getRedis } from "./redis.js";
 
-export type JobKind = "sms" | "alert" | "mm_transfer";
+export type JobKind = "sms" | "alert" | "mm_transfer" | "overdue_notify";
 
 export type JobPayload = {
   kind: JobKind;
@@ -43,6 +43,23 @@ export async function dequeueJob(
   } catch {
     return null;
   }
+}
+
+/**
+ * Si USE_JOB_QUEUE=1 et Redis OK → file worker ; sinon exécute `fallback`.
+ * Défaut sync (OTP / alerts restent fiables sans worker).
+ */
+export async function enqueueOrRun(
+  kind: JobKind,
+  data: Record<string, unknown>,
+  fallback: () => Promise<void>
+): Promise<"queued" | "ran"> {
+  if (process.env.USE_JOB_QUEUE === "1") {
+    const { queued } = await enqueueJob(kind, data);
+    if (queued) return "queued";
+  }
+  await fallback();
+  return "ran";
 }
 
 export { QUEUE_KEY };

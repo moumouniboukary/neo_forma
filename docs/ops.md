@@ -55,6 +55,40 @@ Clé : `PARTNER_API_KEY` (globale) ou `Imf.apiKey` en base. Taux : `Imf.tauxComm
 
 Les opérations du cahier acceptent `canal: "especes" | "mobile_money"` (API + app Flutter).
 
+Rails cash-in / cash-out (stubs jusqu’aux credentials opérateurs) :
+
+| Endpoint | Auth | Rôle |
+|----------|------|------|
+| `GET /mobile-money/providers` | – | Orange / Moov / stub + flag `configured` |
+| `POST /mobile-money/transfer` | JWT | Transfert ; `async: true` → file worker |
+
+Env : `ORANGE_MM_URL`, `ORANGE_MM_API_KEY`, `MOOV_MM_URL`, `MOOV_MM_API_KEY`.
+
+## Worker async
+
+Processus séparé `apps/worker` qui consomme Redis `neoforma:jobs` (SMS, alertes, MM).
+
+```bash
+npm run dev:worker          # local
+# Compose prod : service `worker` (USE_JOB_QUEUE=1 sur l’API)
+```
+
+`USE_JOB_QUEUE=1` : l’API enqueue SMS ; sinon envoi synchrone (défaut safe sans worker).
+
+## Admin agents
+
+| Endpoint | Auth | Rôle |
+|----------|------|------|
+| `GET /admin/stats` | `X-Admin-Key` | Compteurs globaux |
+| `GET /admin/travailleurs?phone=` | idem | Recherche |
+| `GET /admin/credit-applications` | idem | File crédit |
+
+Clé : `ADMIN_API_KEY`.
+
+## White-label
+
+`GET /branding` → `BRAND_*` ou `PARTNER_BRAND_JSON`. L’app Flutter applique couleurs / nom au démarrage.
+
 ## Sync hors ligne
 
 Kinds supportés : `create_operation`, `create_client`, `update_profile`, `update_consents`, **`submit_credit`**.

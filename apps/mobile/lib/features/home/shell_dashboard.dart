@@ -6,12 +6,14 @@ import 'package:intl/intl.dart';
 
 import '../../core/api/client.dart';
 import '../../core/l10n/locale_provider.dart';
+import '../../core/offline/local_cache.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/voice/voice_service.dart';
 import '../../core/widgets/nf_speak_button.dart';
 import '../../core/widgets/nf_widgets.dart';
 import '../auth/auth_provider.dart';
 import '../ledger/ledger_data.dart';
+import '../notifications/notifications_data.dart';
 import '../sync/sync_service.dart';
 
 class AppShell extends ConsumerStatefulWidget {
@@ -28,7 +30,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(syncServiceProvider).flush();
+      final sync = ref.read(syncServiceProvider);
+      sync.startAutoSync();
+      sync.flush();
       final lang = ref.read(authProvider).user?.language;
       if (lang != null && lang.isNotEmpty) {
         ref.read(uxPrefsProvider.notifier).setLanguageLocal(lang);
@@ -124,14 +128,24 @@ class _HomePageState extends ConsumerState<HomePage> {
             '/dashboard',
             parse: (x) => Map<String, dynamic>.from(x as Map),
           );
+      await ref.read(localCacheProvider).putMap(LocalCacheKeys.dashboard, d);
       if (!mounted) return;
       setState(() {
         data = d;
         loading = false;
       });
+      // Notifs locales pour décisions crédit / créances.
+      try {
+        await ref.read(notificationsPollerProvider).pollAndNotify();
+      } catch (_) {}
     } catch (_) {
+      final cached =
+          ref.read(localCacheProvider).getMap(LocalCacheKeys.dashboard);
       if (!mounted) return;
-      setState(() => loading = false);
+      setState(() {
+        data = cached;
+        loading = false;
+      });
     }
   }
 
@@ -167,7 +181,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     return Scaffold(
       floatingActionButton: FloatingActionButton(
         backgroundColor: NfTokens.brand,
-        foregroundColor: NfTokens.bg,
+        foregroundColor: NfTokens.onBrand,
         onPressed: () => context.push('/app/enregistrer'),
         child: const Icon(Icons.add, size: 28),
       ),
@@ -190,7 +204,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            'NeoForma',
+                            NfTokens.appName,
                             maxLines: 1,
                             softWrap: false,
                             style: GoogleFonts.syne(
@@ -287,7 +301,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    const Text(
+                    Text(
                       'Complète les informations sur ton activité pour activer ton NeoScore.',
                       style: TextStyle(color: NfTokens.textMute),
                     ),
@@ -305,7 +319,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               width: double.infinity,
               padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
+                gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: [NfTokens.elevated, NfTokens.surface, NfTokens.bgMid],
@@ -321,7 +335,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                       Expanded(
                         child: Text(
                           t('salesMonth'),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: NfTokens.textMute,
                             fontSize: 13,
                           ),
@@ -346,7 +360,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             color: NfTokens.brandSoft,
                           ),
                         ),
-                        const TextSpan(
+                        TextSpan(
                           text: '  FCFA',
                           style: TextStyle(
                             color: NfTokens.textMute,
@@ -435,9 +449,43 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ],
             ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _QuickAction(
+                    icon: Icons.inventory_2_outlined,
+                    label: t('stock'),
+                    labelKey: 'stock',
+                    iconMode: iconMode,
+                    onTap: () => context.push('/app/stock'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _QuickAction(
+                    icon: Icons.groups_outlined,
+                    label: t('tontine'),
+                    labelKey: 'tontine',
+                    iconMode: iconMode,
+                    onTap: () => context.push('/app/tontine'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _QuickAction(
+                    icon: Icons.notifications_outlined,
+                    label: t('notifications'),
+                    labelKey: 'notifications',
+                    iconMode: iconMode,
+                    onTap: () => context.push('/app/notifications'),
+                  ),
+                ),
+              ],
+            ),
             if (last7.isNotEmpty) ...[
               const SizedBox(height: 22),
-              const Text(
+              Text(
                 '7 derniers jours',
                 style: TextStyle(color: NfTokens.textMute, fontSize: 13),
               ),
@@ -471,7 +519,7 @@ class _HomePageState extends ConsumerState<HomePage> {
                             const SizedBox(height: 6),
                             Text(
                               day.length > 3 ? day.substring(0, 3) : day,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 10,
                                 color: NfTokens.textMute,
                               ),
@@ -485,18 +533,18 @@ class _HomePageState extends ConsumerState<HomePage> {
               ),
             ],
             const SizedBox(height: 22),
-            const Text(
+            Text(
               'Dernières opérations',
               style: TextStyle(color: NfTokens.textMute, fontSize: 13),
             ),
             const SizedBox(height: 8),
             if (loading)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.all(32),
                 child: Center(child: CircularProgressIndicator()),
               )
             else if (recent.isEmpty)
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(vertical: 20),
                 child: Text(
                   'Aucune opération pour l’instant.\nEnregistrez votre première vente.',
@@ -542,14 +590,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                               op['label']?.toString() ??
                                   op['clientName']?.toString() ??
                                   type,
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
                             if (whenLabel.isNotEmpty)
                               Text(
                                 whenLabel,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   color: NfTokens.textMute,
                                   fontSize: 12,
                                 ),
@@ -608,7 +656,7 @@ class _StatCard extends StatelessWidget {
               Expanded(
                 child: Text(
                   label,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: NfTokens.textMute,
                     fontSize: 12,
                   ),

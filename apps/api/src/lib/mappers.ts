@@ -46,6 +46,7 @@ export function toUserProfile(user: TravailleurWithProfile): UserProfile {
     phone: user.telephone,
     displayName: user.nomAffiche || user.telephone,
     language: (prefs?.langue ?? "fr") as UserProfile["language"],
+    theme: (prefs?.theme === "light" ? "light" : "dark") as UserProfile["theme"],
     metier: (profil?.metier as UserProfile["metier"]) ?? undefined,
     anciennete: (profil?.ancienneteActivite as UserProfile["anciennete"]) ?? undefined,
     caJour: (profil?.caJournalierEstime as UserProfile["caJour"]) ?? undefined,
@@ -65,6 +66,7 @@ export function toUserProfile(user: TravailleurWithProfile): UserProfile {
 
 export type OperationWithClient = Operation & {
   client?: ClientInformel | null;
+  articleStock?: { nom: string } | null;
 };
 
 export function toOperation(op: OperationWithClient): OpDto {
@@ -77,12 +79,20 @@ export function toOperation(op: OperationWithClient): OpDto {
     clientId: op.clientId ?? undefined,
     clientName: op.client?.nom ?? undefined,
     natureStock: (op.natureStock as OpDto["natureStock"]) ?? undefined,
+    articleName: op.articleStock?.nom ?? undefined,
+    quantity: op.quantiteStock ?? undefined,
+    articleStockId: op.articleStockId ?? undefined,
+    quantiteStock: op.quantiteStock ?? undefined,
     categorieDepense: op.categorieDepense ?? undefined,
     canal: (op.canal as OpDto["canal"]) ?? undefined,
     dueAt: op.echeance?.toISOString(),
     settledAt: op.dateReglement?.toISOString() ?? null,
     statutCreance: (op.statutCreance as OpDto["statutCreance"]) ?? undefined,
     statutSync: (op.statutSync as OpDto["statutSync"]) ?? undefined,
+    amountSettledFcfa: op.montantRegleFcfa ?? undefined,
+    montantRegleFcfa: op.montantRegleFcfa ?? undefined,
+    remainingFcfa: Math.max(0, op.montantFcfa - (op.montantRegleFcfa ?? 0)),
+    remindedAt: op.derniereRelanceAt?.toISOString() ?? null,
     createdAt: op.createdAt.toISOString(),
     dateOperation: op.dateOperation.toISOString(),
     clientMutationId: op.identifiantIdempotence ?? undefined,

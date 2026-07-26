@@ -33,7 +33,7 @@ npm run dev:api    # http://localhost:3001  · docs : /docs
 
 Postgres : port **5433**. OTP démo : `devCode` (ou SMS via Twilio / `SMS_GATEWAY_URL`).
 
-Ops (alertes, backups, IMF) : [`docs/ops.md`](docs/ops.md) · Déploiement : [`docs/deployment.md`](docs/deployment.md)
+Ops (alertes, backups, IMF) : [`docs/ops.md`](docs/ops.md) · Déploiement : [`docs/deployment.md`](docs/deployment.md) · **ML solvabilité** : [`docs/ml-scoring.md`](docs/ml-scoring.md)
 
 ## 2. App Flutter
 

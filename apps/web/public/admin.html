@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>NeoForma · Admin</title>
+  <style>
+    :root {
+      --bg: #07140f;
+      --bg-mid: #0a1f18;
+      --surface: #0c241c;
+      --elevated: #12352a;
+      --line: rgba(157, 201, 176, 0.14);
+      --text: #e8f6ef;
+      --text-mute: #8fb8a3;
+      --brand: #2db88a;
+      --brand-soft: #5dcaa5;
+      --warn: #e0a045;
+      --danger: #d45a45;
+      --ok: #3ecf9a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: linear-gradient(180deg, var(--bg-mid), var(--bg) 60%);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      margin: 0;
+      color: var(--brand-soft);
+    }
+    h1 span { color: var(--text); font-weight: 700; }
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      gap: 20px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px 20px;
+    }
+    .card h2 {
+      margin: 0 0 14px;
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text-mute);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    input, select {
+      background: var(--elevated);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 14px;
+      min-width: 160px;
+    }
+    input::placeholder { color: var(--text-mute); }
+    input:focus, select:focus { outline: 2px solid var(--brand); }
+    button {
+      background: var(--brand);
+      color: #062018;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 16px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { background: var(--brand-soft); }
+    button.secondary {
+      background: transparent;
+      color: var(--brand-soft);
+      border: 1px solid var(--brand-soft);
+    }
+    button.danger { background: var(--danger); color: #fff; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+    }
+    .stat {
+      background: var(--elevated);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+    }
+    .stat .value {
+      font-size: 24px;
+      font-weight: 800;
+      color: var(--brand-soft);
+    }
+    .stat .label {
+      font-size: 12px;
+      color: var(--text-mute);
+      margin-top: 4px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    th, td {
+      text-align: left;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    th {
+      color: var(--text-mute);
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.04em;
+    }
+    tr:hover td { background: rgba(93, 202, 165, 0.05); }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .badge.ok { background: rgba(62, 207, 154, 0.18); color: var(--ok); }
+    .badge.warn { background: rgba(224, 160, 69, 0.18); color: var(--warn); }
+    .badge.danger { background: rgba(212, 90, 69, 0.18); color: var(--danger); }
+    .muted { color: var(--text-mute); font-size: 13px; }
+    #connBanner {
+      display: none;
+      padding: 10px 16px;
+      border-radius: 10px;
+      background: rgba(212, 90, 69, 0.15);
+      border: 1px solid var(--danger);
+      color: var(--danger);
+      font-size: 13px;
+    }
+    #toast {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: var(--elevated);
+      border: 1px solid var(--brand);
+      color: var(--text);
+      padding: 12px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      display: none;
+      max-width: 320px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+    pre {
+      background: var(--bg);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 12px;
+      overflow: auto;
+      max-height: 260px;
+      color: var(--text-mute);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Neo<span>Forma</span> · Admin</h1>
+    <div class="row">
+      <input id="apiBase" type="text" placeholder="https://api.neoforma.example" style="min-width: 260px;" />
+      <input id="adminKey" type="password" placeholder="Clé ADMIN_API_KEY" style="min-width: 200px;" />
+      <button id="connectBtn">Connecter</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="connBanner"></div>
+
+    <section class="card">
+      <h2>Vue d'ensemble</h2>
+      <div class="row" style="margin-bottom: 12px;">
+        <button class="secondary" id="refreshStats">Rafraîchir</button>
+        <span class="muted" id="statsTime"></span>
+      </div>
+      <div class="stats-grid" id="statsGrid">
+        <div class="muted">Connectez-vous pour charger les statistiques.</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Recherche travailleur</h2>
+      <div class="row" style="margin-bottom: 12px;">
+        <input id="searchPhone" type="text" placeholder="Téléphone (ex. +226 70000000)" />
+        <button id="searchBtn">Rechercher</button>
+        <button class="secondary" id="listRecentBtn">Derniers inscrits</button>
+      </div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Téléphone</th>
+              <th>Nom</th>
+              <th>Statut</th>
+              <th>Onboarding</th>
+              <th>Créé le</th>
+            </tr>
+          </thead>
+          <tbody id="travailleursBody">
+            <tr><td colspan="5" class="muted">Aucune donnée</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Demandes de crédit</h2>
+      <div class="row" style="margin-bottom: 12px;">
+        <select id="creditStatut">
+          <option value="">Tous statuts</option>
+          <option value="soumise">Soumise</option>
+          <option value="en_analyse">En analyse</option>
+          <option value="approuvee">Approuvée</option>
+          <option value="rejetee">Rejetée</option>
+          <option value="decaissee">Décaissée</option>
+        </select>
+        <button id="loadCreditBtn">Charger</button>
+      </div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Référence</th>
+              <th>Montant (FCFA)</th>
+              <th>Statut</th>
+              <th>Issue</th>
+              <th>Usage</th>
+              <th>Soumis le</th>
+            </tr>
+          </thead>
+          <tbody id="creditBody">
+            <tr><td colspan="6" class="muted">Aucune donnée</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Tâches</h2>
+      <div class="row">
+        <button class="danger" id="notifyOverdueBtn">Déclencher relance créances en retard</button>
+        <span class="muted" id="notifyOverdueResult"></span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Réponse brute (debug)</h2>
+      <pre id="rawOutput">—</pre>
+    </section>
+  </main>
+
+  <div id="toast"></div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = {
+      apiBase: localStorage.getItem('nf_admin_base') || '',
+      adminKey: localStorage.getItem('nf_admin_key') || '',
+    };
+    $('apiBase').value = state.apiBase;
+    $('adminKey').value = state.adminKey;
+
+    function toast(msg, isError) {
+      const el = $('toast');
+      el.textContent = msg;
+      el.style.borderColor = isError ? 'var(--danger)' : 'var(--brand)';
+      el.style.display = 'block';
+      clearTimeout(toast._t);
+      toast._t = setTimeout(() => { el.style.display = 'none'; }, 4000);
+    }
+
+    function showRaw(data) {
+      $('rawOutput').textContent = JSON.stringify(data, null, 2);
+    }
+
+    function showConnBanner(msg) {
+      const el = $('connBanner');
+      if (!msg) { el.style.display = 'none'; return; }
+      el.textContent = msg;
+      el.style.display = 'block';
+    }
+
+    async function adminFetch(path, options = {}) {
+      const base = $('apiBase').value.trim().replace(/\/$/, '');
+      const key = $('adminKey').value.trim();
+      if (!base || !key) {
+        toast('Renseignez l\'URL API et la clé admin', true);
+        throw new Error('missing_credentials');
+      }
+      const res = await fetch(base + path, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': key,
+          ...(options.headers || {}),
+        },
+      });
+      let data = null;
+      try { data = await res.json(); } catch (_) { /* no body */ }
+      if (!res.ok) {
+        showConnBanner((data && data.message) || `Erreur ${res.status}`);
+        throw new Error((data && data.message) || `HTTP ${res.status}`);
+      }
+      showConnBanner(null);
+      return data;
+    }
+
+    function fmtNumber(n) {
+      if (n === null || n === undefined) return '—';
+      return new Intl.NumberFormat('fr-FR').format(n);
+    }
+
+    function fmtDate(iso) {
+      if (!iso) return '—';
+      try {
+        return new Date(iso).toLocaleString('fr-FR');
+      } catch (_) {
+        return iso;
+      }
+    }
+
+    function statCard(value, label) {
+      return `<div class="stat"><div class="value">${value}</div><div class="label">${label}</div></div>`;
+    }
+
+    async function loadStats() {
+      try {
+        const data = await adminFetch('/admin/stats');
+        showRaw(data);
+        $('statsTime').textContent = 'Actualisé : ' + fmtDate(data.time);
+        $('statsGrid').innerHTML = [
+          statCard(fmtNumber(data.travailleurs?.total), 'Travailleurs'),
+          statCard(fmtNumber(data.travailleurs?.actifs), 'Comptes actifs'),
+          statCard(fmtNumber(data.operations), 'Opérations'),
+          statCard(fmtNumber(data.creancesOuvertes), 'Créances ouvertes'),
+          statCard(fmtNumber(data.demandesCredit), 'Demandes crédit'),
+          statCard(fmtNumber(data.koboSubmissions), 'Soumissions Kobo'),
+          statCard(fmtNumber(data.commissionsDue), 'Commissions dues'),
+          statCard(data.ml?.enabled ? 'Actif' : 'Inactif', 'Scoring ML'),
+        ].join('');
+      } catch (e) {
+        $('statsGrid').innerHTML = `<div class="muted">Impossible de charger (${e.message})</div>`;
+      }
+    }
+
+    function statutBadge(statut) {
+      const cls = statut === 'actif' ? 'ok' : statut === 'suspendu' ? 'danger' : 'warn';
+      return `<span class="badge ${cls}">${statut || '—'}</span>`;
+    }
+
+    async function searchTravailleurs(phone) {
+      try {
+        const qs = phone ? `?phone=${encodeURIComponent(phone)}` : '?limit=25';
+        const data = await adminFetch('/admin/travailleurs' + qs);
+        showRaw(data);
+        const items = data.items || [];
+        if (items.length === 0) {
+          $('travailleursBody').innerHTML = '<tr><td colspan="5" class="muted">Aucun résultat</td></tr>';
+          return;
+        }
+        $('travailleursBody').innerHTML = items.map((t) => `
+          <tr>
+            <td>${t.telephone}</td>
+            <td>${t.nomAffiche || '—'}</td>
+            <td>${statutBadge(t.statutCompte)}</td>
+            <td>${t.onboardingTermine ? 'Oui' : 'Non'}</td>
+            <td>${fmtDate(t.createdAt)}</td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        toast('Recherche échouée : ' + e.message, true);
+      }
+    }
+
+    function creditStatutBadge(statut) {
+      const cls = statut === 'approuvee' || statut === 'decaissee' ? 'ok'
+        : statut === 'rejetee' ? 'danger' : 'warn';
+      return `<span class="badge ${cls}">${statut || '—'}</span>`;
+    }
+
+    async function loadCreditApplications() {
+      try {
+        const statut = $('creditStatut').value;
+        const qs = statut ? `?statut=${encodeURIComponent(statut)}&limit=50` : '?limit=50';
+        const data = await adminFetch('/admin/credit-applications' + qs);
+        showRaw(data);
+        const items = data.items || [];
+        if (items.length === 0) {
+          $('creditBody').innerHTML = '<tr><td colspan="6" class="muted">Aucune demande</td></tr>';
+          return;
+        }
+        $('creditBody').innerHTML = items.map((c) => `
+          <tr>
+            <td>${c.reference || c.id}</td>
+            <td>${fmtNumber(c.montantDemandeFcfa)}</td>
+            <td>${creditStatutBadge(c.statut)}</td>
+            <td>${c.outcome || '—'}</td>
+            <td>${c.usage || '—'}</td>
+            <td>${fmtDate(c.dateSoumission)}</td>
+          </tr>
+        `).join('');
+      } catch (e) {
+        toast('Chargement échoué : ' + e.message, true);
+      }
+    }
+
+    async function notifyOverdue() {
+      if (!confirm('Déclencher la relance des créances en retard maintenant ?')) return;
+      $('notifyOverdueBtn').disabled = true;
+      $('notifyOverdueResult').textContent = 'En cours…';
+      try {
+        const data = await adminFetch('/admin/notify-overdue', { method: 'POST' });
+        showRaw(data);
+        $('notifyOverdueResult').textContent = `${data.notified} notification(s) envoyée(s).`;
+        toast('Relance déclenchée avec succès');
+      } catch (e) {
+        $('notifyOverdueResult').textContent = 'Échec : ' + e.message;
+      } finally {
+        $('notifyOverdueBtn').disabled = false;
+      }
+    }
+
+    $('connectBtn').addEventListener('click', () => {
+      state.apiBase = $('apiBase').value.trim();
+      state.adminKey = $('adminKey').value.trim();
+      localStorage.setItem('nf_admin_base', state.apiBase);
+      localStorage.setItem('nf_admin_key', state.adminKey);
+      loadStats();
+      toast('Connecté');
+    });
+    $('refreshStats').addEventListener('click', loadStats);
+    $('searchBtn').addEventListener('click', () => searchTravailleurs($('searchPhone').value.trim()));
+    $('listRecentBtn').addEventListener('click', () => { $('searchPhone').value = ''; searchTravailleurs(''); });
+    $('loadCreditBtn').addEventListener('click', loadCreditApplications);
+    $('notifyOverdueBtn').addEventListener('click', notifyOverdue);
+    $('searchPhone').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') searchTravailleurs($('searchPhone').value.trim());
+    });
+
+    if (state.apiBase && state.adminKey) {
+      loadStats();
+    }
+  </script>
+</body>
+</html>

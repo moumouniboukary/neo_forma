@@ -1,6 +1,6 @@
 /**
  * Module partners — IMF (lecture + décision crédit + commissions).
- * Auth partenaire : header X-Partner-Key (= Imf.apiKey ou PARTNER_API_KEY).
+ * Auth partenaire : header X-Partner-Key (= Imf.apiKeyHash ou PARTNER_API_KEY).
  * Auth travailleur JWT conservée pour /imf et /profiles.
  */
 import type { FastifyInstance, FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
@@ -9,10 +9,17 @@ import { ConsentService } from "../consent/service.js";
 import { ScoringService } from "../scoring/service.js";
 import { CreditService, isCreditError } from "../credit/service.js";
 import { toCredit } from "../../lib/mappers.js";
+import { hashPartnerApiKey } from "../../lib/partner-keys.js";
 
 const DecideSchema = z.object({
   statut: z.enum(["en_examen", "approuvee", "refusee", "decaissee"]),
   motifDecision: z.string().max(500).optional(),
+  dureeMois: z.number().int().min(1).max(24).optional(),
+});
+
+const OutcomeSchema = z.object({
+  outcome: z.enum(["rembourse_ok", "defaut"]),
+  motif: z.string().max(500).optional(),
 });
 
 const CommissionStatutSchema = z.object({
@@ -51,9 +58,24 @@ async function resolvePartnerImf(
     return imf;
   }
 
-  const imf = await app.prisma.imf.findFirst({
-    where: { apiKey: key, statutPartenariat: "actif" },
+  const keyHash = hashPartnerApiKey(key);
+  let imf = await app.prisma.imf.findFirst({
+    where: { apiKeyHash: keyHash, statutPartenariat: "actif" },
   });
+
+  if (!imf) {
+    // Fallback legacy clé en clair — migration paresseuse vers apiKeyHash.
+    const legacy = await app.prisma.imf.findFirst({
+      where: { apiKey: key, statutPartenariat: "actif" },
+    });
+    if (legacy) {
+      imf = await app.prisma.imf.update({
+        where: { id: legacy.id },
+        data: { apiKeyHash: keyHash, apiKey: null },
+      });
+    }
+  }
+
   if (!imf) {
     reply.status(401).send({
       error: "unauthorized",
@@ -191,6 +213,37 @@ export const partnersRoutes: FastifyPluginAsync = async (app) => {
         ...parsed.data,
         imfId: imf.id,
       });
+      return toCredit(row);
+    } catch (err) {
+      if (isCreditError(err)) {
+        return reply.status(err.statusCode).send({
+          error: err.code,
+          message: err.message,
+        });
+      }
+      throw err;
+    }
+  });
+
+  /**
+   * Clôture solvabilité (label ML) : rembourse_ok | defaut.
+   * À appeler quand le crédit est soldé ou en défaut.
+   */
+  app.post("/applications/:id/outcome", async (request, reply) => {
+    const imf = await resolvePartnerImf(app, request, reply);
+    if (!imf) return;
+
+    const parsed = OutcomeSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: "validation",
+        message: "Outcome invalide (rembourse_ok | defaut)",
+        details: parsed.error.flatten(),
+      });
+    }
+    const { id } = request.params as { id: string };
+    try {
+      const row = await credit.recordOutcome(id, parsed.data);
       return toCredit(row);
     } catch (err) {
       if (isCreditError(err)) {

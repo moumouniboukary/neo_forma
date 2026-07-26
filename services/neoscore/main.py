@@ -19,7 +19,9 @@ from pydantic import BaseModel, Field
 
 from pipeline import ELIGIBILITY_THRESHOLD, model
 
-ROOT = Path(__file__).resolve().parents[2]
+# En local : repo root = parents[2] ; en Docker WORKDIR=/app → parent unique.
+_here = Path(__file__).resolve().parent
+ROOT = _here.parents[2] if len(_here.parents) > 2 else _here.parent
 MODEL_DIR = ROOT / "DAMINA&POESAM_2026"
 if MODEL_DIR.exists():
     sys.path.insert(0, str(MODEL_DIR))

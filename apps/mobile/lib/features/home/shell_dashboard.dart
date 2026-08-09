@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/api/client.dart';
 import '../../core/l10n/locale_provider.dart';
+import '../../core/l10n/strings.dart';
 import '../../core/offline/local_cache.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/voice/voice_service.dart';
@@ -15,6 +16,7 @@ import '../auth/auth_provider.dart';
 import '../ledger/ledger_data.dart';
 import '../notifications/notifications_data.dart';
 import '../sync/sync_service.dart';
+import '../../core/utils/parse.dart';
 
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.child});
@@ -41,7 +43,9 @@ class _AppShellState extends ConsumerState<AppShell> {
   }
 
   int _indexForLocation(String loc) {
-    if (loc.startsWith('/app/ventes')) return 1;
+    if (loc.startsWith('/app/ventes') || loc.startsWith('/app/depenses')) {
+      return 1;
+    }
     if (loc.startsWith('/app/dettes')) return 2;
     if (loc.startsWith('/app/profil')) return 3;
     return 0;
@@ -52,6 +56,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     final loc = GoRouterState.of(context).uri.toString();
     final index = _indexForLocation(loc);
     final t = ref.watch(nfStringsProvider);
+    final iconMode = ref.watch(uxPrefsProvider).iconMode;
 
     return PopScope(
       canPop: index == 0,
@@ -61,10 +66,18 @@ class _AppShellState extends ConsumerState<AppShell> {
       child: Scaffold(
         body: widget.child,
         bottomNavigationBar: NavigationBar(
+          height: iconMode ? 78 : 64,
+          labelBehavior: iconMode
+              ? NavigationDestinationLabelBehavior.alwaysShow
+              : NavigationDestinationLabelBehavior.alwaysShow,
           selectedIndex: index,
           backgroundColor: NfTokens.surface,
           indicatorColor: NfTokens.brand.withValues(alpha: 0.25),
           onDestinationSelected: (i) {
+            final keys = ['home', 'ledger', 'debts', 'profile'];
+            if (ref.read(uxPrefsProvider).voiceAssist && i < keys.length) {
+              ref.read(voiceServiceProvider).speakKey(keys[i]);
+            }
             switch (i) {
               case 0:
                 context.go('/app');
@@ -78,20 +91,20 @@ class _AppShellState extends ConsumerState<AppShell> {
           },
           destinations: [
             NavigationDestination(
-              icon: const Icon(Icons.home_outlined),
-              selectedIcon: const Icon(Icons.home),
+              icon: Icon(Icons.home_outlined, size: iconMode ? 30 : 24),
+              selectedIcon: Icon(Icons.home, size: iconMode ? 30 : 24),
               label: t('home'),
             ),
             NavigationDestination(
-              icon: const Icon(Icons.menu_book_outlined),
+              icon: Icon(Icons.menu_book_outlined, size: iconMode ? 30 : 24),
               label: t('ledger'),
             ),
             NavigationDestination(
-              icon: const Icon(Icons.payments_outlined),
+              icon: Icon(Icons.payments_outlined, size: iconMode ? 30 : 24),
               label: t('debts'),
             ),
             NavigationDestination(
-              icon: const Icon(Icons.person_outline),
+              icon: Icon(Icons.person_outline, size: iconMode ? 30 : 24),
               label: t('profile'),
             ),
           ],
@@ -112,15 +125,64 @@ class HomePage extends ConsumerStatefulWidget {
 class _HomePageState extends ConsumerState<HomePage> {
   Map<String, dynamic>? data;
   bool loading = true;
+  bool _welcomed = false;
+  bool tipVisible = false;
+  ProviderSubscription<int>? _revisionSub;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _load();
+      _welcomeSpeak();
+      final dismissed = ref
+          .read(localCacheProvider)
+          .getMap(LocalCacheKeys.homeTipDismissed);
+      if (dismissed == null && mounted) {
+        setState(() => tipVisible = true);
+      }
+    });
+    _revisionSub = ref.listenManual<int>(ledgerRevisionProvider, (_, _) {
+      if (mounted) _load();
+    });
+  }
+
+  @override
+  void dispose() {
+    _revisionSub?.close();
+    super.dispose();
+  }
+
+  Future<void> _dismissTip() async {
+    await ref.read(localCacheProvider).putMap(
+          LocalCacheKeys.homeTipDismissed,
+          {'done': true},
+        );
+    if (mounted) setState(() => tipVisible = false);
+  }
+
+  Future<void> _welcomeSpeak() async {
+    if (_welcomed || !mounted) return;
+    _welcomed = true;
+    final prefs = ref.read(uxPrefsProvider);
+    if (!prefs.voiceAssist) return;
+    final voice = ref.read(voiceServiceProvider);
+    final user = ref.read(authProvider).user;
+    final name = user?.displayName.trim() ?? '';
+    if (name.isNotEmpty && !name.startsWith('+')) {
+      await voice.speakKey('helloName', vars: {'name': name});
+    } else {
+      await voice.speakKey('hello');
+    }
+    if (prefs.iconMode) {
+      await voice.speakKey('tapToRecord');
+    }
   }
 
   Future<void> _load() async {
-    await ref.read(syncServiceProvider).flush();
+    // Pas de flush ici : AppShell le lance déjà. Relancer flush à chaque
+    // révision mute syncPending/ledgerRevision pendant les rebuilds (écran rouge).
     try {
       final d = await ref
           .read(apiClientProvider)
@@ -128,17 +190,18 @@ class _HomePageState extends ConsumerState<HomePage> {
             '/dashboard',
             parse: (x) => Map<String, dynamic>.from(x as Map),
           );
+      if (!mounted) return;
       await ref.read(localCacheProvider).putMap(LocalCacheKeys.dashboard, d);
       if (!mounted) return;
       setState(() {
         data = d;
         loading = false;
       });
-      // Notifs locales pour décisions crédit / créances.
       try {
         await ref.read(notificationsPollerProvider).pollAndNotify();
       } catch (_) {}
     } catch (_) {
+      if (!mounted) return;
       final cached =
           ref.read(localCacheProvider).getMap(LocalCacheKeys.dashboard);
       if (!mounted) return;
@@ -152,39 +215,183 @@ class _HomePageState extends ConsumerState<HomePage> {
   bool _isOutflow(String type) =>
       type == 'creance' || type == 'dette' || type == 'depense';
 
+  List<Widget> _iconModeBody({
+    required NfStrings t,
+    required NumberFormat fmt,
+    required int sales,
+    required int debts,
+  }) {
+    return [
+      const SizedBox(height: 20),
+      Material(
+        color: NfTokens.brand,
+        borderRadius: BorderRadius.circular(22),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(22),
+          onTap: () => context.push('/app/enregistrer'),
+          onLongPress: () =>
+              ref.read(voiceServiceProvider).speakKey('tapToRecord'),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+            child: Column(
+              children: [
+                const Icon(
+                  Icons.add_circle_outline,
+                  size: 56,
+                  color: NfTokens.onBrand,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  t('record'),
+                  style: GoogleFonts.syne(
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    color: NfTokens.onBrand,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  t('tapToRecord'),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: NfTokens.onBrand.withValues(alpha: 0.9),
+                    fontSize: 14,
+                    height: 1.3,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+      Row(
+        children: [
+          Expanded(
+            child: _StatCard(
+              label: t('salesMonth'),
+              labelKey: 'salesMonth',
+              value: fmt.format(sales),
+              valueColor: NfTokens.brandSoft,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatCard(
+              label: t('toCollect'),
+              labelKey: 'toCollect',
+              value: fmt.format(debts),
+              valueColor: NfTokens.warn,
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 18),
+      Text(
+        t('moreActions'),
+        style: GoogleFonts.figtree(fontWeight: FontWeight.w700, fontSize: 15),
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.payments_outlined,
+              label: t('debts'),
+              labelKey: 'debts',
+              iconMode: true,
+              onTap: () => context.push('/app/dettes'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.insights_outlined,
+              label: t('neoscore'),
+              labelKey: 'neoscore',
+              iconMode: true,
+              onTap: () => context.push('/app/score'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.account_balance_wallet_outlined,
+              label: t('credit'),
+              labelKey: 'credit',
+              iconMode: true,
+              onTap: () => context.push('/app/credit'),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 10),
+      Row(
+        children: [
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.inventory_2_outlined,
+              label: t('stock'),
+              labelKey: 'stock',
+              iconMode: true,
+              onTap: () => context.push('/app/stock'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.groups_outlined,
+              label: t('tontine'),
+              labelKey: 'tontine',
+              iconMode: true,
+              onTap: () => context.push('/app/tontine'),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _QuickAction(
+              icon: Icons.notifications_outlined,
+              label: t('notifications'),
+              labelKey: 'notifications',
+              iconMode: true,
+              onTap: () => context.push('/app/notifications'),
+            ),
+          ),
+        ],
+      ),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
-    // Recharge l'accueil dès qu'une opération change (création, règlement, sync).
-    ref.listen<int>(ledgerRevisionProvider, (_, _) => _load());
     final user = ref.watch(authProvider).user;
     final pending = ref.watch(syncPendingProvider);
     final syncErr = ref.watch(syncErrorProvider);
     final t = ref.watch(nfStringsProvider);
     final iconMode = ref.watch(uxPrefsProvider).iconMode;
     final fmt = NumberFormat.decimalPattern('fr');
-    final rawName = user?.displayName.trim() ?? '';
     final needsOnboarding = !(user?.onboardingCompleted ?? false);
-    final displayName =
-        rawName.isEmpty || rawName == user?.phone || rawName.startsWith('+')
-        ? t('entrepreneur')
-        : rawName;
-    final sales = data?['monthSalesFcfa'] as int? ?? 0;
-    final debts = data?['openDebtsFcfa'] as int? ?? 0;
-    final overdue = data?['overdueDebtsCount'] as int? ?? 0;
+    final sales = asFcfaInt(data?['monthSalesFcfa']);
+    final debts = asFcfaInt(data?['openDebtsFcfa']);
+    final overdue = asFcfaInt(data?['overdueDebtsCount']);
     final recent = (data?['recentOperations'] as List?) ?? [];
     final last7 = (data?['last7DaysSales'] as List?) ?? [];
+    final topClients = (data?['topClients'] as List?) ?? [];
+    final criticalDebts = (data?['criticalDebts'] as List?) ?? [];
     final maxBar = last7.fold<int>(1, (m, e) {
-      final v = (e as Map)['totalFcfa'] as int? ?? 0;
+      final v = asFcfaInt((e as Map)['totalFcfa']);
       return v > m ? v : m;
     });
 
     return Scaffold(
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: NfTokens.brand,
-        foregroundColor: NfTokens.onBrand,
-        onPressed: () => context.push('/app/enregistrer'),
-        child: const Icon(Icons.add, size: 28),
-      ),
+      floatingActionButton: iconMode
+          ? null
+          : FloatingActionButton(
+              backgroundColor: NfTokens.brand,
+              foregroundColor: NfTokens.onBrand,
+              onPressed: () => context.push('/app/enregistrer'),
+              child: const Icon(Icons.add, size: 28),
+            ),
       body: RefreshIndicator(
         onRefresh: _load,
         color: NfTokens.brand,
@@ -194,87 +401,55 @@ class _HomePageState extends ConsumerState<HomePage> {
             SafeArea(
               bottom: false,
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            NfTokens.appName,
-                            maxLines: 1,
-                            softWrap: false,
-                            style: GoogleFonts.syne(
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              color: NfTokens.brand,
-                              height: 1.05,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                t.format('helloName', {'name': displayName}),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.syne(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w800,
-                                  color: NfTokens.text,
-                                  height: 1.15,
-                                ),
-                              ),
-                            ),
-                            NfSpeakButton(
-                              labelKey: 'helloName',
-                              vars: {'name': displayName},
-                              alwaysShow: true,
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Material(
-                    color: NfTokens.elevated,
-                    borderRadius: BorderRadius.circular(999),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(999),
-                      onTap: () => context.push('/app/score'),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
-                        child: Text(
-                          t('neoscore'),
-                          style: const TextStyle(
-                            color: NfTokens.brandSoft,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                    child: Text(
+                      t('home'),
+                      style: GoogleFonts.syne(
+                        fontSize: iconMode ? 32 : 28,
+                        fontWeight: FontWeight.w800,
+                        color: NfTokens.text,
+                        height: 1.15,
                       ),
                     ),
                   ),
+                  const NfSpeakButton(labelKey: 'home', alwaysShow: true),
                 ],
               ),
             ),
             if (pending > 0) ...[
               const SizedBox(height: 12),
-              _Toast(
-                text: '$pending opération(s) en attente de synchronisation',
-              ),
+              _Toast(text: t.format('offlinePending', {'n': '$pending'})),
             ],
             if (syncErr != null) ...[
               const SizedBox(height: 8),
               _Toast(text: 'Synchronisation · $syncErr', danger: true),
+            ],
+            if (tipVisible && iconMode) ...[
+              const SizedBox(height: 12),
+              Material(
+                color: NfTokens.elevated,
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.touch_app, color: NfTokens.brandSoft),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          t('homeTip'),
+                          style: const TextStyle(height: 1.3),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _dismissTip,
+                        child: Text(t('gotIt')),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ],
             if (needsOnboarding) ...[
               const SizedBox(height: 16),
@@ -295,14 +470,14 @@ class _HomePageState extends ConsumerState<HomePage> {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      'Calcule ta solvabilité quand tu es prêt',
+                      t('yourActivity'),
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w800,
-                      ),
+                            fontWeight: FontWeight.w800,
+                          ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Complète les informations sur ton activité pour activer ton NeoScore.',
+                      t('onboardingHint'),
                       style: TextStyle(color: NfTokens.textMute),
                     ),
                     const SizedBox(height: 14),
@@ -314,308 +489,382 @@ class _HomePageState extends ConsumerState<HomePage> {
                 ),
               ),
             ],
-            const SizedBox(height: 16),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [NfTokens.elevated, NfTokens.surface, NfTokens.bgMid],
-                ),
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: NfTokens.line),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          t('salesMonth'),
-                          style: TextStyle(
-                            color: NfTokens.textMute,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      NfSpeakButton(
-                        labelKey: 'salesMonth',
-                        compact: true,
-                        alwaysShow: true,
-                      ),
+            if (iconMode)
+              ..._iconModeBody(t: t, fmt: fmt, sales: sales, debts: debts)
+            else ...[
+              const SizedBox(height: 16),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 22),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      NfTokens.elevated,
+                      NfTokens.surface,
+                      NfTokens.bgMid,
                     ],
                   ),
-                  const SizedBox(height: 6),
-                  Text.rich(
-                    TextSpan(
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: NfTokens.line),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
                       children: [
-                        TextSpan(
-                          text: fmt.format(sales),
-                          style: GoogleFonts.syne(
-                            fontSize: 36,
-                            fontWeight: FontWeight.w800,
-                            color: NfTokens.brandSoft,
+                        Expanded(
+                          child: Text(
+                            t('salesMonth'),
+                            style: TextStyle(
+                              color: NfTokens.textMute,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
-                        TextSpan(
-                          text: '  FCFA',
-                          style: TextStyle(
-                            color: NfTokens.textMute,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                          ),
+                        const NfSpeakButton(
+                          labelKey: 'salesMonth',
+                          compact: true,
+                          alwaysShow: true,
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: fmt.format(sales),
+                            style: GoogleFonts.syne(
+                              fontSize: 36,
+                              fontWeight: FontWeight.w800,
+                              color: NfTokens.brandSoft,
+                            ),
+                          ),
+                          TextSpan(
+                            text: '  FCFA',
+                            style: TextStyle(
+                              color: NfTokens.textMute,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _StatCard(
+                      label: t('toCollect'),
+                      labelKey: 'toCollect',
+                      value: fmt.format(debts),
+                      valueColor: NfTokens.warn,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _StatCard(
+                      label: t('overdue'),
+                      labelKey: 'overdue',
+                      value: '$overdue',
+                      valueColor: NfTokens.text,
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: _StatCard(
-                    label: t('toCollect'),
-                    labelKey: 'toCollect',
-                    value: fmt.format(debts),
-                    valueColor: NfTokens.warn,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _StatCard(
-                    label: t('overdue'),
-                    labelKey: 'overdue',
-                    value: '$overdue',
-                    valueColor: NfTokens.text,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    t('quickActions'),
-                    style: GoogleFonts.figtree(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 15,
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      t('quickActions'),
+                      style: GoogleFonts.figtree(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
                     ),
                   ),
+                  const NfSpeakButton(
+                    labelKey: 'quickActions',
+                    compact: true,
+                    alwaysShow: true,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickAction(
+                      icon: Icons.add_circle_outline,
+                      label: t('record'),
+                      labelKey: 'record',
+                      onTap: () => context.push('/app/enregistrer'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _QuickAction(
+                      icon: Icons.account_balance_wallet_outlined,
+                      label: t('credit'),
+                      labelKey: 'credit',
+                      onTap: () => context.push('/app/credit'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _QuickAction(
+                      icon: Icons.insights_outlined,
+                      label: t('neoscore'),
+                      labelKey: 'neoscore',
+                      onTap: () => context.push('/app/score'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _QuickAction(
+                      icon: Icons.inventory_2_outlined,
+                      label: t('stock'),
+                      labelKey: 'stock',
+                      onTap: () => context.push('/app/stock'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _QuickAction(
+                      icon: Icons.groups_outlined,
+                      label: t('tontine'),
+                      labelKey: 'tontine',
+                      onTap: () => context.push('/app/tontine'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _QuickAction(
+                      icon: Icons.notifications_outlined,
+                      label: t('notifications'),
+                      labelKey: 'notifications',
+                      onTap: () => context.push('/app/notifications'),
+                    ),
+                  ),
+                ],
+              ),
+              if (last7.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                Text(
+                  '7 derniers jours',
+                  style: TextStyle(color: NfTokens.textMute, fontSize: 13),
                 ),
-                NfSpeakButton(
-                  labelKey: 'quickActions',
-                  compact: true,
-                  alwaysShow: true,
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 100,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: last7.map((raw) {
+                      final d = Map<String, dynamic>.from(raw as Map);
+                      final total = asFcfaInt(d['totalFcfa']);
+                      final day = d['day']?.toString() ?? '';
+                      final h = total == 0
+                          ? 6.0
+                          : (6 + (total / maxBar) * 72).clamp(6.0, 78.0);
+                      return Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              Container(
+                                height: h,
+                                decoration: BoxDecoration(
+                                  color: NfTokens.brand.withValues(
+                                    alpha: total == 0 ? 0.28 : 1,
+                                  ),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                day.length > 3 ? day.substring(0, 3) : day,
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: NfTokens.textMute,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _QuickAction(
-                    icon: Icons.add_circle_outline,
-                    label: t('record'),
-                    labelKey: 'record',
-                    iconMode: iconMode,
-                    onTap: () => context.push('/app/enregistrer'),
-                  ),
+              if (topClients.isNotEmpty) ...[
+                const SizedBox(height: 22),
+                Text(
+                  'Meilleurs clients',
+                  style: TextStyle(color: NfTokens.textMute, fontSize: 13),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _QuickAction(
-                    icon: Icons.account_balance_wallet_outlined,
-                    label: t('credit'),
-                    labelKey: 'credit',
-                    iconMode: iconMode,
-                    onTap: () => context.push('/app/credit'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _QuickAction(
-                    icon: Icons.insights_outlined,
-                    label: t('neoscore'),
-                    labelKey: 'neoscore',
-                    iconMode: iconMode,
-                    onTap: () => context.push('/app/score'),
-                  ),
-                ),
+                const SizedBox(height: 8),
+                ...topClients.take(5).map((raw) {
+                  final c = Map<String, dynamic>.from(raw as Map);
+                  final name = c['clientName']?.toString() ?? 'Client';
+                  final clientSales = asFcfaInt(c['monthSalesFcfa']);
+                  final debt = asFcfaInt(c['openDebtFcfa']);
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(name),
+                    subtitle: Text(
+                      debt > 0
+                          ? 'Ventes ${fmt.format(clientSales)} · créances ${fmt.format(debt)}'
+                          : 'Ventes ${fmt.format(clientSales)} FCFA',
+                      style:
+                          TextStyle(color: NfTokens.textMute, fontSize: 12),
+                    ),
+                    trailing: debt > 0
+                        ? Text(
+                            fmt.format(debt),
+                            style: TextStyle(
+                              color: NfTokens.warn,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          )
+                        : null,
+                  );
+                }),
               ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: _QuickAction(
-                    icon: Icons.inventory_2_outlined,
-                    label: t('stock'),
-                    labelKey: 'stock',
-                    iconMode: iconMode,
-                    onTap: () => context.push('/app/stock'),
-                  ),
+              if (criticalDebts.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'Créances critiques',
+                  style: TextStyle(color: NfTokens.textMute, fontSize: 13),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _QuickAction(
-                    icon: Icons.groups_outlined,
-                    label: t('tontine'),
-                    labelKey: 'tontine',
-                    iconMode: iconMode,
-                    onTap: () => context.push('/app/tontine'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _QuickAction(
-                    icon: Icons.notifications_outlined,
-                    label: t('notifications'),
-                    labelKey: 'notifications',
-                    iconMode: iconMode,
-                    onTap: () => context.push('/app/notifications'),
-                  ),
-                ),
+                const SizedBox(height: 8),
+                ...criticalDebts.take(5).map((raw) {
+                  final d = Map<String, dynamic>.from(raw as Map);
+                  final isOverdue = d['overdue'] == true;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      isOverdue
+                          ? Icons.warning_amber_rounded
+                          : Icons.person_outline,
+                      color: isOverdue ? NfTokens.danger : NfTokens.textMute,
+                    ),
+                    title: Text(d['clientName']?.toString() ?? 'Client'),
+                    subtitle: Text(
+                      isOverdue ? t('overdue') : t('toCollect'),
+                      style: TextStyle(
+                        color:
+                            isOverdue ? NfTokens.danger : NfTokens.textMute,
+                        fontSize: 12,
+                      ),
+                    ),
+                    trailing: Text(
+                      fmt.format(asFcfaInt(d['remainingFcfa'])),
+                      style: TextStyle(
+                        color: isOverdue ? NfTokens.danger : NfTokens.warn,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    onTap: () => context.push('/app/dettes'),
+                  );
+                }),
               ],
-            ),
-            if (last7.isNotEmpty) ...[
               const SizedBox(height: 22),
               Text(
-                '7 derniers jours',
+                t('lastOps'),
                 style: TextStyle(color: NfTokens.textMute, fontSize: 13),
               ),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 100,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: last7.map((raw) {
-                    final d = Map<String, dynamic>.from(raw as Map);
-                    final total = d['totalFcfa'] as int? ?? 0;
-                    final day = d['day']?.toString() ?? '';
-                    final h = total == 0
-                        ? 6.0
-                        : (6 + (total / maxBar) * 72).clamp(6.0, 78.0);
-                    return Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 3),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            Container(
-                              height: h,
-                              decoration: BoxDecoration(
-                                color: NfTokens.brand.withValues(
-                                  alpha: total == 0 ? 0.28 : 1,
-                                ),
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Text(
-                              day.length > 3 ? day.substring(0, 3) : day,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: NfTokens.textMute,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ),
-            ],
-            const SizedBox(height: 22),
-            Text(
-              'Dernières opérations',
-              style: TextStyle(color: NfTokens.textMute, fontSize: 13),
-            ),
-            const SizedBox(height: 8),
-            if (loading)
-              Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else if (recent.isEmpty)
-              Padding(
-                padding: EdgeInsets.symmetric(vertical: 20),
-                child: Text(
-                  'Aucune opération pour l’instant.\nEnregistrez votre première vente.',
-                  style: TextStyle(color: NfTokens.textMute, height: 1.4),
-                ),
-              )
-            else
-              ...recent.take(6).map((raw) {
-                final op = Map<String, dynamic>.from(raw as Map);
-                final type = op['type']?.toString() ?? '';
-                final amount = op['amountFcfa'] as int? ?? 0;
-                final out = _isOutflow(type);
-                final when = op['dateOperation'] ?? op['createdAt'];
-                String whenLabel = '';
-                if (when != null) {
-                  try {
-                    whenLabel = DateFormat(
-                      'dd MMM · HH:mm',
-                      'fr_FR',
-                    ).format(DateTime.parse(when.toString()).toLocal());
-                  } catch (_) {
-                    whenLabel = when.toString();
+              const SizedBox(height: 8),
+              if (loading)
+                const Padding(
+                  padding: EdgeInsets.all(32),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (recent.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Text(
+                    t('noOpsYet'),
+                    style: TextStyle(color: NfTokens.textMute, height: 1.4),
+                  ),
+                )
+              else
+                ...recent.take(6).map((raw) {
+                  final op = Map<String, dynamic>.from(raw as Map);
+                  final type = op['type']?.toString() ?? '';
+                  final amount = asFcfaInt(op['amountFcfa']);
+                  final out = _isOutflow(type);
+                  final when = op['dateOperation'] ?? op['createdAt'];
+                  String whenLabel = '';
+                  if (when != null) {
+                    try {
+                      whenLabel = DateFormat(
+                        'dd MMM · HH:mm',
+                        'fr_FR',
+                      ).format(DateTime.parse(when.toString()).toLocal());
+                    } catch (_) {
+                      whenLabel = when.toString();
+                    }
                   }
-                }
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
-                  ),
-                  decoration: BoxDecoration(
-                    color: NfTokens.elevated.withValues(alpha: 0.55),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: NfTokens.line),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              op['label']?.toString() ??
-                                  op['clientName']?.toString() ??
-                                  type,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (whenLabel.isNotEmpty)
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: NfTokens.elevated.withValues(alpha: 0.55),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: NfTokens.line),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Text(
-                                whenLabel,
-                                style: TextStyle(
-                                  color: NfTokens.textMute,
-                                  fontSize: 12,
+                                op['label']?.toString() ??
+                                    op['clientName']?.toString() ??
+                                    type,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                          ],
+                              if (whenLabel.isNotEmpty)
+                                Text(
+                                  whenLabel,
+                                  style: TextStyle(
+                                    color: NfTokens.textMute,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ),
-                      ),
-                      Text(
-                        '${out ? '−' : '+'}${fmt.format(amount)}',
-                        style: TextStyle(
-                          color: out ? NfTokens.warn : NfTokens.ok,
-                          fontWeight: FontWeight.w800,
+                        Text(
+                          '${out ? '−' : '+'}${fmt.format(amount)}',
+                          style: TextStyle(
+                            color: out ? NfTokens.warn : NfTokens.ok,
+                            fontWeight: FontWeight.w800,
+                          ),
                         ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
+                      ],
+                    ),
+                  );
+                }),
+            ],
           ],
         ),
       ),

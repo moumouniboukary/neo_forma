@@ -7,7 +7,9 @@ import 'features/auth/auth_provider.dart';
 import 'features/auth/register_forgot.dart';
 import 'features/auth/splash_login.dart';
 import 'features/home/shell_dashboard.dart';
+import 'features/ledger/ledger_data.dart';
 import 'features/ledger/ledger_pages.dart';
+import 'features/ledger/products_page.dart';
 import 'features/notifications/notifications_page.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/score_credit_profile.dart';
@@ -74,6 +76,11 @@ GoRouter createRouter(Ref ref) {
             builder: (context, state) => const VentesPage(),
           ),
           GoRoute(
+            path: '/app/depenses',
+            builder: (context, state) =>
+                const VentesPage(initialTab: 'depense'),
+          ),
+          GoRoute(
             path: '/app/dettes',
             builder: (context, state) => const DettesPage(),
           ),
@@ -87,7 +94,16 @@ GoRouter createRouter(Ref ref) {
       GoRoute(
         path: '/app/enregistrer',
         parentNavigatorKey: _rootKey,
-        builder: (context, state) => const RecordPage(),
+        builder: (context, state) {
+          final extra = state.extra;
+          final preset = extra is SaleProduct ? extra : null;
+          return RecordPage(presetProduct: preset);
+        },
+      ),
+      GoRoute(
+        path: '/app/produits',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const ProductsPage(),
       ),
       GoRoute(
         path: '/app/score',

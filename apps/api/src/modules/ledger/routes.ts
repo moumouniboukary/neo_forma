@@ -52,6 +52,21 @@ export const ledgerOperationRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  /** DELETE /operations/:id — corriger une erreur (annule l'effet stock si besoin) */
+  app.delete(
+    "/:id",
+    { preHandler: [app.authenticate] },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      try {
+        await ledger.deleteOperation(request.user.sub, id);
+        return reply.status(204).send();
+      } catch (err) {
+        return sendLedgerError(reply, err);
+      }
+    }
+  );
+
   /** POST /operations/:id/settle — régler une créance, total ou partiel (RM-O05) */
   app.post(
     "/:id/settle",

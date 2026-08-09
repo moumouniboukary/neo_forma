@@ -1,4 +1,4 @@
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { useEffect, type ReactNode } from "react";
 import { AuthProvider, useAuth } from "@/features/auth/AuthContext";
 import { ThemeProvider, useTheme } from "@/shared/theme/ThemeContext";
@@ -11,10 +11,20 @@ import { ForgotPasswordPage } from "@/features/auth/ForgotPasswordPage";
 import { OnboardingPage } from "@/features/onboarding/OnboardingPage";
 import { DashboardPage } from "@/features/dashboard/DashboardPage";
 import { RecordPage } from "@/features/operations/RecordPage";
-import { DettesPage, VentesPage } from "@/features/operations/ListsPages";
+import {
+  DepensesPage,
+  DettesPage,
+  VentesPage,
+} from "@/features/operations/ListsPages";
 import { ScorePage } from "@/features/score/ScorePage";
 import { CreditPage } from "@/features/credit/CreditPage";
 import { ProfilePage } from "@/features/profile/ProfilePage";
+import { ImfAuthProvider } from "@/features/imf/ImfAuthContext";
+import { ImfLoginPage } from "@/features/imf/ImfLoginPage";
+import { ImfShell } from "@/features/imf/ImfShell";
+import { ImfApplicationsPage } from "@/features/imf/ImfApplicationsPage";
+import { ImfReportingPage } from "@/features/imf/ImfReportingPage";
+import { ImfCommissionsPage } from "@/features/imf/ImfCommissionsPage";
 
 function ThemeAuthSync({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -23,6 +33,14 @@ function ThemeAuthSync({ children }: { children: ReactNode }) {
     if (user?.theme) setTheme(user.theme);
   }, [user?.theme, setTheme]);
   return children;
+}
+
+function ImfRoot() {
+  return (
+    <ImfAuthProvider>
+      <Outlet />
+    </ImfAuthProvider>
+  );
 }
 
 export function AppRouter() {
@@ -43,12 +61,23 @@ export function AppRouter() {
                   <Route path="/app" element={<AppShell />}>
                     <Route index element={<DashboardPage />} />
                     <Route path="ventes" element={<VentesPage />} />
+                    <Route path="depenses" element={<DepensesPage />} />
                     <Route path="dettes" element={<DettesPage />} />
                     <Route path="enregistrer" element={<RecordPage />} />
                     <Route path="score" element={<ScorePage />} />
                     <Route path="credit" element={<CreditPage />} />
                     <Route path="profil" element={<ProfilePage />} />
                   </Route>
+                </Route>
+              </Route>
+
+              <Route path="/imf" element={<ImfRoot />}>
+                <Route index element={<Navigate to="login" replace />} />
+                <Route path="login" element={<ImfLoginPage />} />
+                <Route element={<ImfShell />}>
+                  <Route path="dossiers" element={<ImfApplicationsPage />} />
+                  <Route path="reporting" element={<ImfReportingPage />} />
+                  <Route path="commissions" element={<ImfCommissionsPage />} />
                 </Route>
               </Route>
 

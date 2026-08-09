@@ -15,9 +15,21 @@ export const SyncMutationKindSchema = z.enum([
   "update_consents",
   "submit_credit",
   "settle_creance",
+  "delete_operation",
+  "create_tontine",
   "create_tontine_cotisation",
+  "upsert_stock",
 ]);
 export type SyncMutationKind = z.infer<typeof SyncMutationKindSchema>;
+
+/** Upsert article stock hors-ligne (même sémantique que POST /stock/articles). */
+export const UpsertStockMutationSchema = z.object({
+  nom: z.string().min(1).max(120),
+  unite: z.string().max(20).optional(),
+  quantite: z.number().int().nonnegative().optional(),
+  prixUnitaireFcfa: z.number().int().nonnegative().optional(),
+});
+export type UpsertStockMutation = z.infer<typeof UpsertStockMutationSchema>;
 
 /** Payload de règlement hors-ligne (settle_creance) — cible l'opération par son id serveur. */
 export const SettleCreanceMutationSchema = SettleCreanceSchema.extend({
@@ -25,7 +37,25 @@ export const SettleCreanceMutationSchema = SettleCreanceSchema.extend({
 });
 export type SettleCreanceMutation = z.infer<typeof SettleCreanceMutationSchema>;
 
-/** Cotisation tontine hors-ligne — cible la tontine par son id serveur. */
+/** Suppression d'opération hors-ligne (correction). */
+export const DeleteOperationMutationSchema = z.object({
+  operationId: z.string().uuid(),
+});
+export type DeleteOperationMutation = z.infer<
+  typeof DeleteOperationMutationSchema
+>;
+
+/** Création tontine hors-ligne — l'id serveur = clientMutationId (UUID). */
+export const CreateTontineMutationSchema = z.object({
+  nom: z.string().min(1).max(120),
+  cotisationFcfa: z.number().int().positive(),
+  frequence: z.enum(["quotidien", "hebdo", "mensuel"]).optional(),
+  membres: z.number().int().positive().optional(),
+  note: z.string().max(500).optional(),
+});
+export type CreateTontineMutation = z.infer<typeof CreateTontineMutationSchema>;
+
+/** Cotisation tontine hors-ligne — cible la tontine par son id serveur (ou UUID local syncé). */
 export const CreateTontineCotisationMutationSchema = z.object({
   tontineId: z.string().uuid(),
   montantFcfa: z.number().int().positive(),
@@ -73,8 +103,23 @@ export const SyncMutationSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     ...baseMutation,
+    kind: z.literal("delete_operation"),
+    payload: DeleteOperationMutationSchema,
+  }),
+  z.object({
+    ...baseMutation,
+    kind: z.literal("create_tontine"),
+    payload: CreateTontineMutationSchema,
+  }),
+  z.object({
+    ...baseMutation,
     kind: z.literal("create_tontine_cotisation"),
     payload: CreateTontineCotisationMutationSchema,
+  }),
+  z.object({
+    ...baseMutation,
+    kind: z.literal("upsert_stock"),
+    payload: UpsertStockMutationSchema,
   }),
 ]);
 export type SyncMutation = z.infer<typeof SyncMutationSchema>;

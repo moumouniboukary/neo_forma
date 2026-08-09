@@ -1,6 +1,6 @@
 import type { OperationHorsLigne, PrismaClient } from "@prisma/client";
 import type { CreateOperation, SyncMutation } from "@neoforma/shared";
-import { toClient, toOperation } from "../../lib/mappers.js";
+import { toArticleStock, toClient, toOperation } from "../../lib/mappers.js";
 import { LedgerService, isLedgerError } from "../ledger/service.js";
 import { ProfileService, isProfileError } from "../profile/service.js";
 import { ConsentService, isConsentError } from "../consent/service.js";
@@ -30,6 +30,7 @@ export type SyncPushResult = {
 export type SyncPullResult = {
   operations: ReturnType<typeof toOperation>[];
   clients: ReturnType<typeof toClient>[];
+  stock: ReturnType<typeof toArticleStock>[];
   serverTime: string;
   /** Curseur à renvoyer au prochain pull (ISO). */
   nextSince: string;
@@ -145,7 +146,7 @@ export class SyncService {
     const limit = Math.min(Math.max(opts.limit ?? 100, 1), 200);
     const serverTime = new Date();
 
-    const [ops, clients] = await Promise.all([
+    const [ops, clients, stock] = await Promise.all([
       this.prisma.operation.findMany({
         where: {
           travailleurId,
@@ -163,13 +164,23 @@ export class SyncService {
         orderBy: { updatedAt: "asc" },
         take: limit + 1,
       }),
+      this.prisma.articleStock.findMany({
+        where: {
+          travailleurId,
+          updatedAt: { gt: since },
+        },
+        orderBy: { updatedAt: "asc" },
+        take: limit + 1,
+      }),
     ]);
 
     const opsHasMore = ops.length > limit;
     const clientsHasMore = clients.length > limit;
+    const stockHasMore = stock.length > limit;
     const opsPage = opsHasMore ? ops.slice(0, limit) : ops;
     const clientsPage = clientsHasMore ? clients.slice(0, limit) : clients;
-    const hasMore = opsHasMore || clientsHasMore;
+    const stockPage = stockHasMore ? stock.slice(0, limit) : stock;
+    const hasMore = opsHasMore || clientsHasMore || stockHasMore;
 
     // nextSince = max(updatedAt) des éléments renvoyés, sinon serverTime.
     let maxUpdated = since.getTime();
@@ -179,14 +190,18 @@ export class SyncService {
     for (const c of clientsPage) {
       maxUpdated = Math.max(maxUpdated, c.updatedAt.getTime());
     }
+    for (const s of stockPage) {
+      maxUpdated = Math.max(maxUpdated, s.updatedAt.getTime());
+    }
     const nextSince =
-      opsPage.length || clientsPage.length
+      opsPage.length || clientsPage.length || stockPage.length
         ? new Date(maxUpdated).toISOString()
         : serverTime.toISOString();
 
     return {
       operations: opsPage.map(toOperation),
       clients: clientsPage.map(toClient),
+      stock: stockPage.map(toArticleStock),
       serverTime: serverTime.toISOString(),
       nextSince,
       hasMore,
@@ -290,6 +305,51 @@ export class SyncService {
         );
         return;
       }
+      case "delete_operation": {
+        try {
+          await this.ledger.deleteOperation(
+            travailleurId,
+            mutation.payload.operationId
+          );
+        } catch (err) {
+          // Déjà supprimée → idempotent.
+          if (!(isLedgerError(err) && err.code === "not_found")) {
+            throw err;
+          }
+        }
+        await this.upsertAccepted(
+          travailleurId,
+          mutation,
+          mutation.payload.operationId,
+          existingQueue?.id
+        );
+        return;
+      }
+      case "create_tontine": {
+        const existing = await this.prisma.tontine.findFirst({
+          where: { id: mutation.clientMutationId, travailleurId },
+        });
+        if (!existing) {
+          await this.prisma.tontine.create({
+            data: {
+              id: mutation.clientMutationId,
+              travailleurId,
+              nom: mutation.payload.nom.trim(),
+              cotisationFcfa: mutation.payload.cotisationFcfa,
+              frequence: mutation.payload.frequence ?? "mensuel",
+              membres: mutation.payload.membres ?? 1,
+              note: mutation.payload.note?.trim() || null,
+            },
+          });
+        }
+        await this.upsertAccepted(
+          travailleurId,
+          mutation,
+          null,
+          existingQueue?.id
+        );
+        return;
+      }
       case "create_tontine_cotisation": {
         const tontine = await this.prisma.tontine.findFirst({
           where: { id: mutation.payload.tontineId, travailleurId },
@@ -304,6 +364,43 @@ export class SyncService {
             note: mutation.payload.note?.trim() || null,
           },
         });
+        await this.upsertAccepted(
+          travailleurId,
+          mutation,
+          null,
+          existingQueue?.id
+        );
+        return;
+      }
+      case "upsert_stock": {
+        const nom = mutation.payload.nom.trim();
+        const existing = await this.prisma.articleStock.findUnique({
+          where: { travailleurId_nom: { travailleurId, nom } },
+        });
+        if (existing) {
+          await this.prisma.articleStock.update({
+            where: { id: existing.id },
+            data: {
+              quantite: existing.quantite + (mutation.payload.quantite ?? 0),
+              ...(mutation.payload.unite
+                ? { unite: mutation.payload.unite }
+                : {}),
+              ...(mutation.payload.prixUnitaireFcfa !== undefined
+                ? { prixUnitaireFcfa: mutation.payload.prixUnitaireFcfa }
+                : {}),
+            },
+          });
+        } else {
+          await this.prisma.articleStock.create({
+            data: {
+              travailleurId,
+              nom,
+              unite: mutation.payload.unite ?? "u",
+              quantite: mutation.payload.quantite ?? 0,
+              prixUnitaireFcfa: mutation.payload.prixUnitaireFcfa ?? null,
+            },
+          });
+        }
         await this.upsertAccepted(
           travailleurId,
           mutation,

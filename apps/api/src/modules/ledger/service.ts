@@ -185,7 +185,8 @@ export class LedgerService {
       const article = await this.adjustArticleQuantity(
         travailleurId,
         input.articleStockId,
-        delta
+        delta,
+        natureStock === "sortie"
       );
       articleStockId = article.id;
     } else if (type === "stock" && nomArticle) {
@@ -194,9 +195,45 @@ export class LedgerService {
       const article = await this.upsertArticleQuantity(
         travailleurId,
         nomArticle,
-        delta
+        delta,
+        natureStock === "sortie"
       );
       articleStockId = article.id;
+    } else if (type === "stock") {
+      throw new LedgerError(
+        "validation",
+        "Nom d'article obligatoire pour un mouvement de stock",
+        400
+      );
+    } else if (type === "vente") {
+      // Vente liée au stock : décrémente si l'article existe (id ou nom).
+      // Pas d'article en catalogue → vente acceptée sans impact stock.
+      const quantite = quantiteInput ?? 1;
+      if (input.articleStockId) {
+        const article = await this.adjustArticleQuantity(
+          travailleurId,
+          input.articleStockId,
+          -quantite,
+          true
+        );
+        articleStockId = article.id;
+      } else if (nomArticle) {
+        const existing = await this.prisma.articleStock.findFirst({
+          where: {
+            travailleurId,
+            nom: { equals: nomArticle, mode: "insensitive" },
+          },
+        });
+        if (existing) {
+          const article = await this.adjustArticleQuantity(
+            travailleurId,
+            existing.id,
+            -quantite,
+            true
+          );
+          articleStockId = article.id;
+        }
+      }
     }
 
     const echeance = input.dueAt ? new Date(input.dueAt) : null;
@@ -208,7 +245,8 @@ export class LedgerService {
       statutSync: "synchronisee",
       identifiantIdempotence: input.clientMutationId ?? null,
       natureStock,
-      quantiteStock: type === "stock" ? (quantiteInput ?? null) : null,
+      quantiteStock:
+        type === "stock" || type === "vente" ? (quantiteInput ?? null) : null,
       categorieDepense: type === "depense" ? input.categorieDepense ?? null : null,
       canal: input.canal ?? null,
       echeance: type === "creance" ? echeance : null,
@@ -225,15 +263,74 @@ export class LedgerService {
     });
   }
 
+  /**
+   * Supprime une opération (correction d'erreur) et annule l'effet stock
+   * (vente / mouvement stock) si un article était lié.
+   */
+  async deleteOperation(
+    travailleurId: string,
+    operationId: string
+  ): Promise<void> {
+    const op = await this.prisma.operation.findFirst({
+      where: { id: operationId, travailleurId },
+    });
+    if (!op) {
+      throw new LedgerError("not_found", "Opération introuvable", 404);
+    }
+
+    const qty = op.quantiteStock ?? 0;
+    if (op.articleStockId && qty > 0) {
+      if (op.type === "vente" || (op.type === "stock" && op.natureStock === "sortie")) {
+        await this.adjustArticleQuantity(
+          travailleurId,
+          op.articleStockId,
+          qty,
+          false
+        );
+      } else if (op.type === "stock" && op.natureStock === "entree") {
+        await this.adjustArticleQuantity(
+          travailleurId,
+          op.articleStockId,
+          -qty,
+          true
+        );
+      }
+    }
+
+    await this.prisma.operation.delete({ where: { id: operationId } });
+  }
+
   /** Crée l'article s'il n'existe pas, sinon ajuste la quantité (+/-). */
   private async upsertArticleQuantity(
     travailleurId: string,
     nom: string,
-    delta: number
+    delta: number,
+    isSortie = false
   ) {
     const existing = await this.prisma.articleStock.findUnique({
       where: { travailleurId_nom: { travailleurId, nom } },
     });
+    if (isSortie) {
+      if (!existing) {
+        throw new LedgerError(
+          "stock_missing",
+          "Cet article n'existe pas en stock — impossible de faire une sortie",
+          400
+        );
+      }
+      const need = Math.abs(delta);
+      if (existing.quantite < need) {
+        throw new LedgerError(
+          "stock_insufficient",
+          `Stock insuffisant (dispo : ${existing.quantite})`,
+          400
+        );
+      }
+      return this.prisma.articleStock.update({
+        where: { id: existing.id },
+        data: { quantite: existing.quantite - need },
+      });
+    }
     if (existing) {
       return this.prisma.articleStock.update({
         where: { id: existing.id },
@@ -249,13 +346,28 @@ export class LedgerService {
   private async adjustArticleQuantity(
     travailleurId: string,
     articleStockId: string,
-    delta: number
+    delta: number,
+    isSortie = false
   ) {
     const existing = await this.prisma.articleStock.findFirst({
       where: { id: articleStockId, travailleurId },
     });
     if (!existing) {
       throw new LedgerError("not_found", "Article stock introuvable", 404);
+    }
+    if (isSortie) {
+      const need = Math.abs(delta);
+      if (existing.quantite < need) {
+        throw new LedgerError(
+          "stock_insufficient",
+          `Stock insuffisant (dispo : ${existing.quantite})`,
+          400
+        );
+      }
+      return this.prisma.articleStock.update({
+        where: { id: existing.id },
+        data: { quantite: existing.quantite - need },
+      });
     }
     return this.prisma.articleStock.update({
       where: { id: existing.id },
@@ -453,18 +565,132 @@ export class LedgerService {
       d.setDate(weekAgo.getDate() + i);
       const key = d.toISOString().slice(0, 10);
       const totalFcfa = weekOps
-        .filter((o) => o.dateOperation.toISOString().slice(0, 10) === key)
-        .reduce((s, o) => s + o.montantFcfa, 0);
+        .filter((o: { dateOperation: Date; montantFcfa: number }) =>
+          o.dateOperation.toISOString().slice(0, 10) === key
+        )
+        .reduce(
+          (s: number, o: { montantFcfa: number }) => s + o.montantFcfa,
+          0
+        );
       return { day: days[d.getDay()], totalFcfa };
     });
 
+    const remaining = (o: {
+      montantFcfa: number;
+      montantRegleFcfa: number | null;
+    }) => Math.max(0, o.montantFcfa - (o.montantRegleFcfa ?? 0));
+
+    /** Agrégat clients : volume créances ouvertes + ventes du mois liées. */
+    type ClientAgg = {
+      clientId: string;
+      clientName: string;
+      openDebtFcfa: number;
+      overdueFcfa: number;
+      monthSalesFcfa: number;
+    };
+    const byClient = new Map<string, ClientAgg>();
+
+    for (const debt of openDebts) {
+      if (!debt.clientId || !debt.client) continue;
+      const cur = byClient.get(debt.clientId) ?? {
+        clientId: debt.clientId,
+        clientName: debt.client.nom,
+        openDebtFcfa: 0,
+        overdueFcfa: 0,
+        monthSalesFcfa: 0,
+      };
+      const reste = remaining(debt);
+      cur.openDebtFcfa += reste;
+      if (debt.statutCreance === "en_retard") cur.overdueFcfa += reste;
+      byClient.set(debt.clientId, cur);
+    }
+
+    const monthSalesWithClients = await this.prisma.operation.findMany({
+      where: {
+        travailleurId,
+        type: "vente",
+        dateOperation: { gte: monthStart },
+        clientId: { not: null },
+      },
+      include: { client: true },
+    });
+    for (const sale of monthSalesWithClients) {
+      if (!sale.clientId || !sale.client) continue;
+      const cur = byClient.get(sale.clientId) ?? {
+        clientId: sale.clientId,
+        clientName: sale.client.nom,
+        openDebtFcfa: 0,
+        overdueFcfa: 0,
+        monthSalesFcfa: 0,
+      };
+      cur.monthSalesFcfa += sale.montantFcfa;
+      byClient.set(sale.clientId, cur);
+    }
+
+    const topClients = [...byClient.values()]
+      .map((c) => ({
+        ...c,
+        scoreFcfa: c.monthSalesFcfa + c.openDebtFcfa,
+      }))
+      .sort((a, b) => b.scoreFcfa - a.scoreFcfa)
+      .slice(0, 5)
+      .map(({ scoreFcfa: _s, ...rest }) => rest);
+
+    const criticalDebts = openDebts
+      .filter(
+        (d: {
+          statutCreance: string | null;
+          montantFcfa: number;
+          montantRegleFcfa: number | null;
+        }) => d.statutCreance === "en_retard" || remaining(d) > 0
+      )
+      .map(
+        (d: {
+          id: string;
+          clientId: string | null;
+          client: { nom: string } | null;
+          montantFcfa: number;
+          montantRegleFcfa: number | null;
+          echeance: Date | null;
+          statutCreance: string | null;
+        }) => ({
+          id: d.id,
+          clientId: d.clientId,
+          clientName: d.client?.nom ?? "Client",
+          amountFcfa: d.montantFcfa,
+          remainingFcfa: remaining(d),
+          dueAt: d.echeance?.toISOString() ?? null,
+          overdue: d.statutCreance === "en_retard",
+        })
+      )
+      .sort(
+        (
+          a: { overdue: boolean; remainingFcfa: number },
+          b: { overdue: boolean; remainingFcfa: number }
+        ) => {
+          if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+          return b.remainingFcfa - a.remainingFcfa;
+        }
+      )
+      .slice(0, 5);
+
     return {
-      monthSalesFcfa: monthSales.reduce((s, o) => s + o.montantFcfa, 0),
-      openDebtsFcfa: openDebts.reduce((s, o) => s + o.montantFcfa, 0),
-      overdueDebtsCount: openDebts.filter((d) => d.statutCreance === "en_retard")
-        .length,
+      monthSalesFcfa: monthSales.reduce(
+        (s: number, o: { montantFcfa: number }) => s + o.montantFcfa,
+        0
+      ),
+      openDebtsFcfa: openDebts.reduce(
+        (s: number, o: { montantFcfa: number; montantRegleFcfa: number | null }) =>
+          s + remaining(o),
+        0
+      ),
+      overdueDebtsCount: openDebts.filter(
+        (d: { statutCreance: string | null }) => d.statutCreance === "en_retard"
+      ).length,
       last7DaysSales,
       recentOperations: recent,
+      topClients,
+      criticalDebts,
     };
   }
 

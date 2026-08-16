@@ -1,12 +1,10 @@
 #!/bin/sh
-set -e
-
+# Ne jamais bloquer le boot : un migrate raté tuait le service (status 1).
 echo "[entrypoint] prisma migrate deploy…"
-if ! npx prisma migrate deploy; then
-  echo "[entrypoint] migrate a échoué — on débloque agent_dossiers puis on réessaie"
-  npx prisma migrate resolve --rolled-back 20260816100000_agent_dossiers || true
-  npx prisma migrate deploy
-fi
+npx prisma migrate deploy || echo "[entrypoint] WARN migrate deploy failed, API starts anyway"
+
+echo "[entrypoint] ensure agent_dossiers…"
+npx prisma db execute --file prisma/ensure-agent-dossiers.sql || echo "[entrypoint] WARN ensure table failed"
 
 echo "[entrypoint] démarrage API"
 exec npx tsx src/main.ts

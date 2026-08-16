@@ -1,5 +1,4 @@
--- CreateTable
-CREATE TABLE "agent_dossiers" (
+CREATE TABLE IF NOT EXISTS "agent_dossiers" (
     "id" TEXT NOT NULL,
     "clientMutationId" TEXT NOT NULL,
     "agentUserId" TEXT NOT NULL,
@@ -20,22 +19,11 @@ CREATE TABLE "agent_dossiers" (
     "motifDecision" TEXT,
     "decidedAt" TIMESTAMP(3),
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" TIMESTAMP(3) NOT NULL,
-
+    "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "agent_dossiers_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "agent_dossiers_clientMutationId_key" ON "agent_dossiers"("clientMutationId");
-
--- CreateIndex
-CREATE INDEX "agent_dossiers_agentUserId_createdAt_idx" ON "agent_dossiers"("agentUserId", "createdAt");
-
--- CreateIndex
-CREATE INDEX "agent_dossiers_statut_idx" ON "agent_dossiers"("statut");
-
--- CreateIndex
-CREATE INDEX "agent_dossiers_recommendation_idx" ON "agent_dossiers"("recommendation");
-
--- AddForeignKey
-ALTER TABLE "agent_dossiers" ADD CONSTRAINT "agent_dossiers_agentUserId_fkey" FOREIGN KEY ("agentUserId") REFERENCES "travailleurs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+CREATE UNIQUE INDEX IF NOT EXISTS "agent_dossiers_clientMutationId_key" ON "agent_dossiers"("clientMutationId");
+CREATE INDEX IF NOT EXISTS "agent_dossiers_agentUserId_createdAt_idx" ON "agent_dossiers"("agentUserId", "createdAt");
+CREATE INDEX IF NOT EXISTS "agent_dossiers_statut_idx" ON "agent_dossiers"("statut");
+CREATE INDEX IF NOT EXISTS "agent_dossiers_recommendation_idx" ON "agent_dossiers"("recommendation");

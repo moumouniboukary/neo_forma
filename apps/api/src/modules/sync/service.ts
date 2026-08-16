@@ -409,6 +409,42 @@ export class SyncService {
         );
         return;
       }
+      case "create_agent_dossier": {
+        const existing = await this.prisma.agentDossier.findUnique({
+          where: { clientMutationId: mutation.clientMutationId },
+        });
+        if (!existing) {
+          const { input, result, note } = mutation.payload;
+          await this.prisma.agentDossier.create({
+            data: {
+              id: mutation.clientMutationId,
+              clientMutationId: mutation.clientMutationId,
+              agentUserId: travailleurId,
+              clientNom: input.clientNom.trim(),
+              clientTelephone: input.clientTelephone?.trim() || null,
+              inputJson: input,
+              score: result.score,
+              recommendation: result.recommendation,
+              chargeRate: result.chargeRate,
+              montantSoutenableFcfa: result.montantSoutenableFcfa,
+              echeanceEstimeeFcfa: result.echeanceEstimeeFcfa,
+              revenuMensuelFcfa: result.revenuMensuelFcfa,
+              montantDemandeFcfa: input.montantDemandeFcfa,
+              driversJson: result.drivers,
+              resultJson: result,
+              note: note?.trim() || null,
+              statut: "soumise",
+            },
+          });
+        }
+        await this.upsertAccepted(
+          travailleurId,
+          mutation,
+          null,
+          existingQueue?.id
+        );
+        return;
+      }
       default: {
         const _exhaustive: never = mutation;
         throw new SyncError(

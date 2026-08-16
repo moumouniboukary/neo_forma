@@ -7,6 +7,7 @@ import {
 import { OnboardingUpdateSchema, UpdatePreferencesSchema } from "./profile.js";
 import { UpdateConsentsBatchSchema } from "./consent.js";
 import { SubmitCreditSchema } from "./credit.js";
+import { CreateAgentDossierSchema } from "./score.js";
 
 export const SyncMutationKindSchema = z.enum([
   "create_operation",
@@ -19,6 +20,7 @@ export const SyncMutationKindSchema = z.enum([
   "create_tontine",
   "create_tontine_cotisation",
   "upsert_stock",
+  "create_agent_dossier",
 ]);
 export type SyncMutationKind = z.infer<typeof SyncMutationKindSchema>;
 
@@ -120,6 +122,11 @@ export const SyncMutationSchema = z.discriminatedUnion("kind", [
     ...baseMutation,
     kind: z.literal("upsert_stock"),
     payload: UpsertStockMutationSchema,
+  }),
+  z.object({
+    ...baseMutation,
+    kind: z.literal("create_agent_dossier"),
+    payload: CreateAgentDossierSchema,
   }),
 ]);
 export type SyncMutation = z.infer<typeof SyncMutationSchema>;

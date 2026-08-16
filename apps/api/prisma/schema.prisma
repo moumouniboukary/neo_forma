@@ -37,6 +37,7 @@ model Travailleur {
   articlesStock        ArticleStock[]
   tontines             Tontine[]
   notifications        NotificationInApp[]
+  agentDossiers        AgentDossier[]
 
   @@map("travailleurs")
 }
@@ -505,4 +506,41 @@ model NotificationInApp {
 
   @@index([travailleurId, lu, createdAt])
   @@map("notifications_in_app")
+}
+
+/// Dossier scoring terrain agent DigiCoop (hors ligne → sync).
+model AgentDossier {
+  id                    String    @id @default(uuid())
+  /// Idempotence sync (= clientMutationId mobile).
+  clientMutationId      String    @unique
+  agentUserId           String
+  clientNom             String
+  clientTelephone       String?
+  /// Saisie formulaire (AgentScoreInput).
+  inputJson             Json
+  score                 Int
+  /// recommande | analyse_complementaire | a_reexaminer
+  recommendation        String
+  chargeRate            Float
+  montantSoutenableFcfa Int
+  echeanceEstimeeFcfa   Int
+  revenuMensuelFcfa     Int
+  montantDemandeFcfa    Int
+  /// Top drivers figés [{key,label,delta}].
+  driversJson           Json
+  resultJson            Json
+  note                  String?
+  /// soumise | en_examen | validee | a_revoir
+  statut                String    @default("soumise")
+  motifDecision         String?
+  decidedAt             DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  agent Travailleur @relation(fields: [agentUserId], references: [id], onDelete: Restrict)
+
+  @@index([agentUserId, createdAt])
+  @@index([statut])
+  @@index([recommendation])
+  @@map("agent_dossiers")
 }

@@ -1,5 +1,5 @@
--- CreateTable
-CREATE TABLE "agent_dossiers" (
+-- CreateTable (idempotent : un deploy précédent a pu échouer à mi-chemin)
+CREATE TABLE IF NOT EXISTS "agent_dossiers" (
     "id" TEXT NOT NULL,
     "clientMutationId" TEXT NOT NULL,
     "agentUserId" TEXT NOT NULL,
@@ -25,17 +25,19 @@ CREATE TABLE "agent_dossiers" (
     CONSTRAINT "agent_dossiers_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "agent_dossiers_clientMutationId_key" ON "agent_dossiers"("clientMutationId");
+CREATE UNIQUE INDEX IF NOT EXISTS "agent_dossiers_clientMutationId_key" ON "agent_dossiers"("clientMutationId");
+CREATE INDEX IF NOT EXISTS "agent_dossiers_agentUserId_createdAt_idx" ON "agent_dossiers"("agentUserId", "createdAt");
+CREATE INDEX IF NOT EXISTS "agent_dossiers_statut_idx" ON "agent_dossiers"("statut");
+CREATE INDEX IF NOT EXISTS "agent_dossiers_recommendation_idx" ON "agent_dossiers"("recommendation");
 
--- CreateIndex
-CREATE INDEX "agent_dossiers_agentUserId_createdAt_idx" ON "agent_dossiers"("agentUserId", "createdAt");
-
--- CreateIndex
-CREATE INDEX "agent_dossiers_statut_idx" ON "agent_dossiers"("statut");
-
--- CreateIndex
-CREATE INDEX "agent_dossiers_recommendation_idx" ON "agent_dossiers"("recommendation");
-
--- AddForeignKey
-ALTER TABLE "agent_dossiers" ADD CONSTRAINT "agent_dossiers_agentUserId_fkey" FOREIGN KEY ("agentUserId") REFERENCES "travailleurs"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'agent_dossiers_agentUserId_fkey'
+  ) THEN
+    ALTER TABLE "agent_dossiers"
+      ADD CONSTRAINT "agent_dossiers_agentUserId_fkey"
+      FOREIGN KEY ("agentUserId") REFERENCES "travailleurs"("id")
+      ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;

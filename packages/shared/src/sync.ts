@@ -69,7 +69,7 @@ export type CreateTontineCotisationMutation = z.infer<
 
 const baseMutation = {
   clientMutationId: z.string().uuid(),
-  createdAt: z.string().datetime(),
+  createdAt: z.string().min(10),
 };
 
 export const SyncMutationSchema = z.discriminatedUnion("kind", [

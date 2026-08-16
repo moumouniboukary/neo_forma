@@ -22,9 +22,11 @@ export const syncRoutes: FastifyPluginAsync = async (app) => {
   app.post("/push", { preHandler: [app.authenticate] }, async (request, reply) => {
     const parsed = SyncPushRequestSchema.safeParse(request.body);
     if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      const where = first?.path?.length ? first.path.join(".") : "body";
       return reply.status(400).send({
         error: "validation",
-        message: "Payload sync invalide",
+        message: `Payload sync invalide (${where}: ${first?.message ?? "erreur"})`,
         details: parsed.error.flatten(),
       });
     }

@@ -33,6 +33,7 @@ import { tontineRoutes } from "./modules/tontine/routes.js";
 import { notificationsRoutes } from "./modules/notifications/routes.js";
 import { passportRoutes } from "./modules/passport/routes.js";
 import { ussdRoutes } from "./modules/ussd/routes.js";
+import { devicesRoutes } from "./modules/devices/routes.js";
 
 const INFRA_PATHS = new Set(["/health", "/ready", "/metrics"]);
 
@@ -148,6 +149,7 @@ export async function buildApp() {
               status: { type: "string" },
               service: { type: "string" },
               time: { type: "string" },
+              agentDossiers: { type: "boolean" },
             },
           },
         },
@@ -157,6 +159,7 @@ export async function buildApp() {
       status: "ok",
       service: "neoforma-api",
       time: new Date().toISOString(),
+      agentDossiers: true,
     })
   );
 
@@ -224,6 +227,7 @@ export async function buildApp() {
   await app.register(tontineRoutes, { prefix: "/tontine" });
   await app.register(tontineRoutes, { prefix: "/tontines" });
   await app.register(notificationsRoutes, { prefix: "/notifications" });
+  await app.register(devicesRoutes, { prefix: "/devices" });
   await app.register(passportRoutes, { prefix: "/me" });
   await app.register(ussdRoutes, { prefix: "/ussd" });
 

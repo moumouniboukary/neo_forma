@@ -95,16 +95,22 @@ export type AgentRiskCategory = z.infer<typeof AgentRiskCategorySchema>;
 export const AgentScoreDriverSchema = z.object({
   key: z.string(),
   label: z.string(),
-  delta: z.number(),
+  delta: z.coerce.number(),
 });
 export type AgentScoreDriver = z.infer<typeof AgentScoreDriverSchema>;
+
+const asInt = z.coerce.number().int();
 
 /** Saisie terrain agent (formulaire DigiCoop). */
 export const AgentScoreInputSchema = z.object({
   clientNom: z.string().min(1).max(120),
-  clientTelephone: z.string().min(8).max(20).optional(),
+  clientTelephone: z
+    .string()
+    .max(32)
+    .optional()
+    .transform((s) => (s && s.replace(/\s/g, "").length >= 8 ? s : undefined)),
   /** false = primo-demandeur : l’historique coopérative est ignoré. */
-  clientConnu: z.boolean().default(false),
+  clientConnu: z.coerce.boolean().default(false),
   secteurActivite: z
     .enum([
       "commerce",
@@ -115,43 +121,47 @@ export const AgentScoreInputSchema = z.object({
       "restauration",
       "autre",
     ])
+    .catch("commerce")
     .default("commerce"),
-  tailleMenage: z.number().int().min(1).max(30).default(1),
+  tailleMenage: asInt.min(1).max(30).default(1),
   /** 0 aucun, 1 quelques-uns, 2 nombreux. */
-  incidentsPaiement: z.number().int().min(0).max(2).default(0),
+  incidentsPaiement: asInt.min(0).max(2).default(0),
   /** Couche transactionnelle (optionnelle — primo-demandeur sans historique). */
-  regulariteDepots: z.number().int().min(0).max(4).default(0),
-  ancienneteCompteMois: z.number().int().nonnegative().default(0),
-  remboursementsAnterieurs: z.number().int().min(0).max(3).default(0),
+  regulariteDepots: asInt.min(0).max(4).default(0),
+  ancienneteCompteMois: asInt.nonnegative().default(0),
+  remboursementsAnterieurs: asInt.min(0).max(3).default(0),
   /** Couche proxy. */
-  ancienneteActiviteAns: z.number().int().min(0).max(30).default(0),
-  tontine: z.boolean().default(false),
-  tontineAns: z.number().int().nonnegative().default(0),
-  nbGarants: z.number().int().min(0).max(10).default(0),
-  ancienneteCoopAns: z.number().int().nonnegative().default(0),
-  saisonnalite: z.enum(["stable", "moderee", "forte"]).default("stable"),
-  actifTerrain: z.boolean().default(false),
-  actifBetail: z.boolean().default(false),
-  actifMateriel: z.boolean().default(false),
+  ancienneteActiviteAns: asInt.min(0).max(30).default(0),
+  tontine: z.coerce.boolean().default(false),
+  tontineAns: asInt.nonnegative().default(0),
+  nbGarants: asInt.min(0).max(10).default(0),
+  ancienneteCoopAns: asInt.nonnegative().default(0),
+  saisonnalite: z
+    .enum(["stable", "moderee", "forte"])
+    .catch("stable")
+    .default("stable"),
+  actifTerrain: z.coerce.boolean().default(false),
+  actifBetail: z.coerce.boolean().default(false),
+  actifMateriel: z.coerce.boolean().default(false),
   /** Capacité — fourchettes déclaratives (FCFA). */
-  revenuMensuelFcfa: z.number().int().nonnegative(),
-  chargesMensuellesFcfa: z.number().int().nonnegative().default(0),
-  montantDemandeFcfa: z.number().int().positive(),
-  dureeMois: z.number().int().min(1).max(24).default(3),
+  revenuMensuelFcfa: asInt.nonnegative(),
+  chargesMensuellesFcfa: asInt.nonnegative().default(0),
+  montantDemandeFcfa: asInt.positive(),
+  dureeMois: asInt.min(1).max(24).default(3),
 });
 export type AgentScoreInput = z.infer<typeof AgentScoreInputSchema>;
 
 export const AgentScoreResultSchema = z.object({
   /** Échelle 300–850 (les anciens dossiers 0–100 restent acceptés). */
-  score: z.number().int().min(0).max(850),
-  recommendation: AgentRecommendationSchema,
-  riskCategory: AgentRiskCategorySchema.default("modere"),
-  drivers: z.array(AgentScoreDriverSchema).max(3),
-  chargeRate: z.number().min(0),
-  montantSoutenableFcfa: z.number().int().nonnegative(),
-  echeanceEstimeeFcfa: z.number().int().nonnegative(),
-  revenuMensuelFcfa: z.number().int().nonnegative(),
-  computedAt: z.string().datetime(),
+  score: asInt.min(0).max(850),
+  recommendation: AgentRecommendationSchema.catch("a_reexaminer"),
+  riskCategory: AgentRiskCategorySchema.catch("modere").default("modere"),
+  drivers: z.array(AgentScoreDriverSchema).max(3).default([]),
+  chargeRate: z.coerce.number().nonnegative(),
+  montantSoutenableFcfa: asInt.nonnegative(),
+  echeanceEstimeeFcfa: asInt.nonnegative(),
+  revenuMensuelFcfa: asInt.nonnegative(),
+  computedAt: z.string().min(10),
 });
 export type AgentScoreResult = z.infer<typeof AgentScoreResultSchema>;
 

@@ -66,6 +66,15 @@ export async function buildApp() {
     allowList: (req) => INFRA_PATHS.has(req.url.split("?")[0] ?? ""),
   });
   await app.register(jwt, { secret: config.jwtSecret });
+
+  /** Liveness — dispo avant Postgres (sonde Render). */
+  app.get("/health", async () => ({
+    status: "ok",
+    service: "neoforma-api",
+    time: new Date().toISOString(),
+    agentDossiers: true,
+  }));
+
   await app.register(prismaPlugin);
   await registerOpenApi(app);
 
@@ -135,33 +144,6 @@ export async function buildApp() {
       });
     }
   });
-
-  /** Liveness — process up (k8s / Render probes). */
-  app.get(
-    "/health",
-    {
-      schema: {
-        tags: ["health"],
-        response: {
-          200: {
-            type: "object",
-            properties: {
-              status: { type: "string" },
-              service: { type: "string" },
-              time: { type: "string" },
-              agentDossiers: { type: "boolean" },
-            },
-          },
-        },
-      },
-    },
-    async () => ({
-      status: "ok",
-      service: "neoforma-api",
-      time: new Date().toISOString(),
-      agentDossiers: true,
-    })
-  );
 
   /**
    * Readiness — Postgres obligatoire ; Redis si configuré.

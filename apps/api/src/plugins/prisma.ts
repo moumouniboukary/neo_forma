@@ -36,8 +36,13 @@ async function connectWithRetry(
 
 const prismaPluginImpl: FastifyPluginAsync = async (app) => {
   const prisma = new PrismaClient();
-  await connectWithRetry(prisma);
   app.decorate("prisma", prisma);
+  // Ne pas await : Render exige que le process écoute PORT tout de suite
+  // (/health). Postgres free peut mettre 30–90 s à se réveiller.
+  void connectWithRetry(prisma).catch((err) => {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[prisma] toujours injoignable après relances: ${msg}`);
+  });
   app.addHook("onClose", async () => {
     await prisma.$disconnect();
     await closeRedis();

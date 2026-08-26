@@ -1,6 +1,5 @@
-# Render Blueprint — API NeoForma + Postgres + Redis + ML solvabilité + worker.
+# Render Blueprint — API NeoForma + Postgres + Redis + ML solvabilité.
 # https://render.com → New → Blueprint → pointer sur ce repo.
-# Secrets (sync: false) à renseigner dans le dashboard après le 1er deploy.
 databases:
   - name: neoforma-db
     databaseName: neoforma
@@ -12,6 +11,7 @@ services:
     name: neoforma-redis
     plan: free
     maxmemoryPolicy: allkeys-lru
+    # Accès interne uniquement (API sur le même compte Render).
     ipAllowList: []
 
   - type: web
@@ -31,8 +31,7 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile.api
     dockerContext: .
-    # /health = process vivant. Ne pas sonder /ready ici : une base
-    # encore endormie (plan free) renvoyait 503 et Render tuait l’instance.
+    # /health répond dès que le process écoute (avant Postgres).
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
@@ -50,15 +49,13 @@ services:
         value: production
       - key: HOST
         value: 0.0.0.0
-      - key: USE_JOB_QUEUE
-        value: "1"
+      # Render injecte PORT automatiquement — ne pas le forcer.
+      # À renseigner dans le dashboard Render :
       - key: CORS_ORIGIN
         sync: false
+      # Après le 1er deploy ML : https://neoforma-ml-xxxx.onrender.com
       - key: SCORING_ML_URL
-        fromService:
-          name: neoforma-ml
-          type: web
-          property: host
+        sync: false
       - key: SCORING_ML_TIMEOUT_MS
         value: "8000"
       - key: ADMIN_API_KEY
@@ -81,17 +78,9 @@ services:
         sync: false
       - key: ORANGE_MM_API_KEY
         sync: false
-      - key: ORANGE_MM_TOKEN_URL
-        sync: false
-      - key: ORANGE_MM_CLIENT_ID
-        sync: false
-      - key: ORANGE_MM_CLIENT_SECRET
-        sync: false
       - key: MOOV_MM_URL
         sync: false
       - key: MOOV_MM_API_KEY
-        sync: false
-      - key: FCM_SERVER_KEY
         sync: false
       - key: BRAND_APP_NAME
         sync: false
@@ -102,49 +91,4 @@ services:
       - key: BRAND_LOGO_URL
         sync: false
       - key: BRAND_SUPPORT_PHONE
-        sync: false
-
-  - type: worker
-    name: neoforma-worker
-    runtime: docker
-    plan: free
-    dockerfilePath: ./Dockerfile.worker
-    dockerContext: .
-    envVars:
-      - key: DATABASE_URL
-        fromDatabase:
-          name: neoforma-db
-          property: connectionString
-      - key: REDIS_URL
-        fromService:
-          name: neoforma-redis
-          type: keyvalue
-          property: connectionString
-      - key: NODE_ENV
-        value: production
-      - key: USE_JOB_QUEUE
-        value: "1"
-      - key: TWILIO_ACCOUNT_SID
-        sync: false
-      - key: TWILIO_AUTH_TOKEN
-        sync: false
-      - key: TWILIO_FROM
-        sync: false
-      - key: ALERT_WEBHOOK_URL
-        sync: false
-      - key: ORANGE_MM_URL
-        sync: false
-      - key: ORANGE_MM_API_KEY
-        sync: false
-      - key: ORANGE_MM_TOKEN_URL
-        sync: false
-      - key: ORANGE_MM_CLIENT_ID
-        sync: false
-      - key: ORANGE_MM_CLIENT_SECRET
-        sync: false
-      - key: MOOV_MM_URL
-        sync: false
-      - key: MOOV_MM_API_KEY
-        sync: false
-      - key: FCM_SERVER_KEY
         sync: false

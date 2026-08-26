@@ -417,23 +417,28 @@ export class CreditService {
     });
   }
 
-  /** Seed minimal IMF pilote si aucune. */
+  /** Seed minimal IMF pilote si aucune. Ne doit pas bloquer le boot Render. */
   async ensurePilotImf(): Promise<void> {
-    const count = await this.prisma.imf.count();
-    if (count > 0) return;
-    await this.prisma.imf.create({
-      data: {
-        raisonSociale: "IMF Pilote NeoForma",
-        pays: "Burkina Faso",
-        statutPartenariat: "actif",
-        niveauAcces: "consultation",
-        contactNom: "Partenariats",
-        contactEmail: "partenariats@neoforma.bf",
-        tauxCommission: 0.02,
-        apiKeyHash: process.env.PARTNER_API_KEY
-          ? hashPartnerApiKey(process.env.PARTNER_API_KEY)
-          : null,
-      },
-    });
+    try {
+      const count = await this.prisma.imf.count();
+      if (count > 0) return;
+      await this.prisma.imf.create({
+        data: {
+          raisonSociale: "IMF Pilote NeoForma",
+          pays: "Burkina Faso",
+          statutPartenariat: "actif",
+          niveauAcces: "consultation",
+          contactNom: "Partenariats",
+          contactEmail: "partenariats@neoforma.bf",
+          tauxCommission: 0.02,
+          apiKeyHash: process.env.PARTNER_API_KEY
+            ? hashPartnerApiKey(process.env.PARTNER_API_KEY)
+            : null,
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`[credit] ensurePilotImf: ${msg}`);
+    }
   }
 }

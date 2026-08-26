@@ -90,7 +90,9 @@ export const partnersRoutes: FastifyPluginAsync = async (app) => {
   const consents = new ConsentService(app.prisma);
   const scoring = new ScoringService(app.prisma);
   const credit = new CreditService(app.prisma);
-  await credit.ensurePilotImf();
+  void credit.ensurePilotImf().catch((err) => {
+    app.log.warn({ err }, "ensurePilotImf reporté (base pas encore prête)");
+  });
 
   /** Liste IMF actives */
   app.get("/imf", { preHandler: [app.authenticate] }, async () => {

@@ -16,7 +16,9 @@ function sendError(reply: FastifyReply, err: unknown) {
 
 export const creditRoutes: FastifyPluginAsync = async (app) => {
   const credit = new CreditService(app.prisma);
-  await credit.ensurePilotImf();
+  void credit.ensurePilotImf().catch((err) => {
+    app.log.warn({ err }, "ensurePilotImf reporté (base pas encore prête)");
+  });
 
   app.get("/offer", { preHandler: [app.authenticate] }, async (request, reply) => {
     try {

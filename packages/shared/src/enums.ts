@@ -1,7 +1,13 @@
 import { z } from "zod";
 
-export const LanguageSchema = z.enum(["fr", "mr", "dl", "ff"]);
+export const LanguageSchema = z.enum(["fr", "mr"]);
 export type Language = z.infer<typeof LanguageSchema>;
+
+/** Coerce legacy codes (dl, ff, …) vers une langue supportée. */
+export function normalizeLanguage(code: string | null | undefined): Language {
+  return code === "mr" ? "mr" : "fr";
+}
+
 
 export const MetierSchema = z.enum([
   "commerce",

@@ -8,6 +8,7 @@ import {
   buildOfferAmount,
   computeNeoScore,
   ELIGIBILITY_THRESHOLD,
+  finalizeNeoScoreResult,
 } from "@neoforma/neoscore";
 import type { NeoScoreResult, ScoreFeatures } from "@neoforma/shared";
 import {
@@ -42,10 +43,14 @@ function monthLabel(d = new Date()): string {
   return d.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 }
 
-function toResult(
+function toResultPartial(
   neoscore: NeoScore,
   history: Array<{ month: string; score: number }>
-): NeoScoreResult {
+): Pick<
+  NeoScoreResult,
+  "score" | "segment" | "criteria" | "history" | "engine" | "modelVersion"
+> &
+  Partial<NeoScoreResult> {
   return {
     score: neoscore.valeur,
     segment: neoscore.segment as NeoScoreResult["segment"],
@@ -93,7 +98,7 @@ export class ScoringService {
       throw new ScoringError("not_found", "Utilisateur introuvable", 404);
     }
 
-    const [ops, demandes, existing] = await Promise.all([
+    const [ops, demandes, existing, tontineCotisations] = await Promise.all([
       this.prisma.operation.findMany({
         where: { travailleurId },
         orderBy: { dateOperation: "desc" },
@@ -110,18 +115,20 @@ export class ScoringService {
           historique: { orderBy: { enregistreAt: "desc" }, take: 6 },
         },
       }),
+      this.sumTontineCotisations30d(travailleurId),
     ]);
 
     const history = (existing?.historique ?? [])
       .slice()
       .reverse()
-      .map((h) => ({ month: h.periode, score: h.valeur }));
+      .map((h: NeoScoreHistorique) => ({ month: h.periode, score: h.valeur }));
 
     const features = featuresFromProfilAndOps({
       profil: user.profilActivite,
       ops,
       hasSmartphone: Boolean(user.telephone),
       demandes,
+      tontineCotisations30Fcfa: tontineCotisations,
     });
 
     let result: NeoScoreResult = computeNeoScore(features, history);
@@ -131,10 +138,21 @@ export class ScoringService {
     if (isMlScoringEnabled()) {
       const ml = await mlScore(features);
       if (ml) {
-        const mlResult = mlToNeoScoreResult(ml, history);
-        result = mlResult;
+        const mlPartial = mlToNeoScoreResult(ml, history);
+        result = finalizeNeoScoreResult(
+          {
+            score: mlPartial.score,
+            segment: mlPartial.segment,
+            criteria: mlPartial.criteria,
+            history,
+            engine: "ml",
+            modelVersion: mlPartial.modelVersion ?? ml.modelVersion ?? null,
+            computedAt: mlPartial.computedAt,
+          },
+          features
+        );
         moteur = "ml";
-        modelVersion = mlResult.modelVersion ?? ml.modelVersion ?? null;
+        modelVersion = result.modelVersion ?? null;
       }
     }
 
@@ -181,7 +199,7 @@ export class ScoringService {
       ...result,
       engine: moteur,
       modelVersion,
-      history: historique.map((h) => ({
+      history: historique.map((h: NeoScoreHistorique) => ({
         month: h.periode,
         score: h.valeur,
       })),
@@ -189,10 +207,38 @@ export class ScoringService {
     };
 
     const offre = persistOffer
-      ? await this.upsertOffer(travailleurId, neoscore.id, resultWithHistory)
+      ? await this.upsertOffer(travailleurId, neoscore.id, resultWithHistory, features)
       : null;
 
     return { result: resultWithHistory, neoscore, offre, features };
+  }
+
+  /** Features actuelles (profil + ops) — pour enrichir un score en cache. */
+  private async loadFeatures(travailleurId: string): Promise<ScoreFeatures> {
+    const user = await this.prisma.travailleur.findUnique({
+      where: { id: travailleurId },
+      include: { profilActivite: true },
+    });
+    const [ops, demandes, tontineCotisations] = await Promise.all([
+      this.prisma.operation.findMany({
+        where: { travailleurId },
+        orderBy: { dateOperation: "desc" },
+        take: 500,
+      }),
+      this.prisma.demandeCredit.findMany({
+        where: { travailleurId },
+        select: { statut: true },
+        take: 50,
+      }),
+      this.sumTontineCotisations30d(travailleurId),
+    ]);
+    return featuresFromProfilAndOps({
+      profil: user?.profilActivite ?? null,
+      ops,
+      hasSmartphone: Boolean(user?.telephone),
+      demandes,
+      tontineCotisations30Fcfa: tontineCotisations,
+    });
   }
 
   /** Lecture score : cache TTL, sinon recalcul sans créer d'offre. */
@@ -209,13 +255,15 @@ export class ScoringService {
       Date.now() - existing.dateCalcul.getTime() < SCORE_CACHE_TTL_MS;
 
     if (fresh && existing) {
-      return toResult(
+      const partial = toResultPartial(
         existing,
-        existing.historique.map((h) => ({
+        existing.historique.map((h: NeoScoreHistorique) => ({
           month: h.periode,
           score: h.valeur,
         }))
       );
+      const features = await this.loadFeatures(travailleurId);
+      return finalizeNeoScoreResult(partial, features);
     }
 
     const { result } = await this.recalculate(travailleurId, {
@@ -253,9 +301,10 @@ export class ScoringService {
   private async upsertOffer(
     travailleurId: string,
     neoscoreId: string,
-    result: NeoScoreResult
+    result: NeoScoreResult,
+    features: ScoreFeatures
   ): Promise<OffreCredit> {
-    const amounts = buildOfferAmount(result.score);
+    const amounts = buildOfferAmount(result.score, features);
     const now = new Date();
     const current = await this.prisma.offreCredit.findFirst({
       where: {
@@ -317,6 +366,23 @@ export class ScoringService {
     await this.prisma.neoScoreHistorique.create({
       data: { neoscoreId, periode, valeur },
     });
+  }
+
+  /** Cotisations tontine enregistrées sur les 30 derniers jours. */
+  private async sumTontineCotisations30d(travailleurId: string): Promise<number> {
+    const since = new Date();
+    since.setDate(since.getDate() - 30);
+    const rows = await this.prisma.tontineCotisation.findMany({
+      where: {
+        datePaiement: { gte: since },
+        tontine: { travailleurId, actif: true },
+      },
+      select: { montantFcfa: true },
+    });
+    return rows.reduce(
+      (s: number, r: { montantFcfa: number }) => s + r.montantFcfa,
+      0
+    );
   }
 }
 

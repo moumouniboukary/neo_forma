@@ -176,6 +176,137 @@ export const partnersRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  /** Reporting synthétique pour le portail IMF / impact coopérative. */
+  app.get("/stats", async (request, reply) => {
+    const imf = await resolvePartnerImf(app, request, reply);
+    if (!imf) return;
+
+    const whereImf = {
+      OR: [{ imfId: imf.id }, { imfId: null }],
+    };
+    const decidedStatuts = ["approuvee", "refusee", "decaissee"] as const;
+
+    const [
+      total,
+      soumises,
+      enExamen,
+      approuvees,
+      refusees,
+      decaissees,
+      withScore,
+      rembourses,
+      defauts,
+      enCours,
+      amountsAll,
+      amountsDecaisse,
+      commissions,
+      decidedRows,
+    ] = await Promise.all([
+      app.prisma.demandeCredit.count({ where: whereImf }),
+      app.prisma.demandeCredit.count({
+        where: { ...whereImf, statut: "soumise" },
+      }),
+      app.prisma.demandeCredit.count({
+        where: { ...whereImf, statut: "en_examen" },
+      }),
+      app.prisma.demandeCredit.count({
+        where: { ...whereImf, statut: "approuvee" },
+      }),
+      app.prisma.demandeCredit.count({
+        where: { ...whereImf, statut: "refusee" },
+      }),
+      app.prisma.demandeCredit.count({
+        where: { ...whereImf, statut: "decaissee" },
+      }),
+      app.prisma.demandeCredit.count({
+        where: { ...whereImf, snapshotScoreId: { not: null } },
+      }),
+      app.prisma.demandeCredit.count({
+        where: { ...whereImf, outcome: "rembourse_ok" },
+      }),
+      app.prisma.demandeCredit.count({
+        where: { ...whereImf, outcome: "defaut" },
+      }),
+      app.prisma.demandeCredit.count({
+        where: { ...whereImf, outcome: "en_cours" },
+      }),
+      app.prisma.demandeCredit.aggregate({
+        where: whereImf,
+        _sum: { montantDemandeFcfa: true },
+      }),
+      app.prisma.demandeCredit.aggregate({
+        where: { ...whereImf, statut: "decaissee" },
+        _sum: { montantDemandeFcfa: true },
+      }),
+      app.prisma.commission.aggregate({
+        where: { imfId: imf.id },
+        _sum: { montantCommissionFcfa: true },
+        _count: true,
+      }),
+      app.prisma.demandeCredit.findMany({
+        where: {
+          ...whereImf,
+          statut: { in: [...decidedStatuts] },
+          dateSoumission: { not: null },
+        },
+        select: {
+          dateSoumission: true,
+          dateDecaissement: true,
+          updatedAt: true,
+        },
+        take: 500,
+      }),
+    ]);
+
+    const delaysHours: number[] = [];
+    for (const row of decidedRows) {
+      if (!row.dateSoumission) continue;
+      const end = row.dateDecaissement ?? row.updatedAt;
+      const ms = end.getTime() - row.dateSoumission.getTime();
+      if (ms >= 0) delaysHours.push(ms / (1000 * 60 * 60));
+    }
+    const avgDelayHours =
+      delaysHours.length > 0
+        ? Math.round(
+            (delaysHours.reduce((a, b) => a + b, 0) / delaysHours.length) * 10
+          ) / 10
+        : null;
+
+    return {
+      imf: {
+        id: imf.id,
+        raisonSociale: imf.raisonSociale,
+        tauxCommission: imf.tauxCommission,
+      },
+      demandes: {
+        total,
+        soumises,
+        enExamen,
+        approuvees,
+        refusees,
+        decaissees,
+      },
+      impact: {
+        /** Dossiers avec score NeoForma figé à la soumission */
+        dossiersScores: withScore,
+        montantDemandeTotalFcfa: amountsAll._sum.montantDemandeFcfa ?? 0,
+        montantDecaisseFcfa: amountsDecaisse._sum.montantDemandeFcfa ?? 0,
+        /** Délai moyen soumission → décision (h), proxy via updatedAt / décaissement */
+        delaiInstructionMoyenHeures: avgDelayHours,
+        delaiEchantillon: delaysHours.length,
+        outcomes: {
+          rembourses,
+          defauts,
+          enCours,
+        },
+      },
+      commissions: {
+        count: commissions._count,
+        totalFcfa: commissions._sum.montantCommissionFcfa ?? 0,
+      },
+    };
+  });
+
   /** File des demandes de crédit pour l'IMF partenaire. */
   app.get("/applications", async (request, reply) => {
     const imf = await resolvePartnerImf(app, request, reply);
@@ -192,6 +323,28 @@ export const partnersRoutes: FastifyPluginAsync = async (app) => {
       include: { snapshotScore: true },
     });
     return apps.map(toCredit);
+  });
+
+  /** Fiche risque d'un dossier (score figé + critères). */
+  app.get("/applications/:id", async (request, reply) => {
+    const imf = await resolvePartnerImf(app, request, reply);
+    if (!imf) return;
+
+    const { id } = request.params as { id: string };
+    const row = await app.prisma.demandeCredit.findFirst({
+      where: {
+        id,
+        OR: [{ imfId: imf.id }, { imfId: null }],
+      },
+      include: { snapshotScore: true },
+    });
+    if (!row) {
+      return reply.status(404).send({
+        error: "not_found",
+        message: "Dossier introuvable",
+      });
+    }
+    return toCredit(row);
   });
 
   /** Décision sur une demande (+ commission si approuvée / décaissée). */

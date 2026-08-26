@@ -55,6 +55,35 @@ describe("featuresFromProfilAndOps", () => {
     assert.equal(features.caJour, 4);
     assert.equal(features.mobileMoney, 3);
     assert.equal(features.compte, 2);
+    assert.equal(features.expensesLast30Fcfa, 0);
+    assert.ok(features.declaredCaMidpointFcfa > 0);
+  });
+
+  it("agrège dépenses, semaines actives et profil solvabilité", () => {
+    const since = new Date();
+    since.setDate(since.getDate() - 5);
+    const profil = {
+      chargesFixesMensuelles: 20_000,
+      saisonnalite: "forte",
+      garantieSolidaire: true,
+      caJournalierEstime: "15_30k",
+    } as ProfilActivite;
+
+    const features = featuresFromProfilAndOps({
+      profil,
+      ops: [
+        op({ type: "vente", montantFcfa: 50_000, dateOperation: since }),
+        op({ type: "depense", montantFcfa: 10_000, dateOperation: since }),
+      ],
+      tontineCotisations30Fcfa: 5_000,
+    });
+
+    assert.equal(features.expensesLast30Fcfa, 10_000);
+    assert.equal(features.monthlyFixedChargesFcfa, 20_000);
+    assert.equal(features.tontineCotisations30Fcfa, 5_000);
+    assert.equal(features.saisonnalite, "forte");
+    assert.equal(features.garantieSolidaire, true);
+    assert.ok(features.activeWeeksLast30 >= 1);
   });
 
   it("garde la rétrocompatibilité (profil, ops)", () => {

@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { toArticleStock } from "../../lib/mappers.js";
 
 const CreateArticleSchema = z.object({
   nom: z.string().min(1).max(120),
@@ -16,26 +17,6 @@ const UpdateArticleSchema = z.object({
   prixUnitaireFcfa: z.number().int().nonnegative().nullable().optional(),
 });
 
-function toArticleDto(a: {
-  id: string;
-  nom: string;
-  unite: string;
-  quantite: number;
-  prixUnitaireFcfa: number | null;
-  createdAt: Date;
-  updatedAt: Date;
-}) {
-  return {
-    id: a.id,
-    nom: a.nom,
-    unite: a.unite,
-    quantite: a.quantite,
-    prixUnitaireFcfa: a.prixUnitaireFcfa ?? undefined,
-    createdAt: a.createdAt.toISOString(),
-    updatedAt: a.updatedAt.toISOString(),
-  };
-}
-
 /**
  * Catalogue stock local — GET/POST /stock/articles.
  * POST fait un upsert par nom : crée l'article ou incrémente la quantité
@@ -50,7 +31,7 @@ export const stockRoutes: FastifyPluginAsync = async (app) => {
         where: { travailleurId: request.user.sub },
         orderBy: { nom: "asc" },
       });
-      return { items: items.map(toArticleDto) };
+      return { items: items.map(toArticleStock) };
     }
   );
 
@@ -89,7 +70,7 @@ export const stockRoutes: FastifyPluginAsync = async (app) => {
               prixUnitaireFcfa: prixUnitaireFcfa ?? null,
             },
           });
-      return reply.status(201).send(toArticleDto(article));
+      return reply.status(201).send(toArticleStock(article));
     }
   );
 
@@ -126,7 +107,7 @@ export const stockRoutes: FastifyPluginAsync = async (app) => {
           ...(prixUnitaireFcfa !== undefined ? { prixUnitaireFcfa } : {}),
         },
       });
-      return toArticleDto(article);
+      return toArticleStock(article);
     }
   );
 };

@@ -14,6 +14,14 @@ export const CreditOfferSchema = z.object({
 });
 export type CreditOffer = z.infer<typeof CreditOfferSchema>;
 
+export const CreditRiskCriteriaSchema = z.object({
+  regularite: z.number().int().min(0).max(100),
+  volume: z.number().int().min(0).max(100),
+  dettes: z.number().int().min(0).max(100),
+  croissance: z.number().int().min(0).max(100),
+});
+export type CreditRiskCriteria = z.infer<typeof CreditRiskCriteriaSchema>;
+
 export const CreditApplicationSchema = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
@@ -28,6 +36,14 @@ export const CreditApplicationSchema = z.object({
   dateSoumission: z.string().datetime().nullable().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
+  /** Score figé à la soumission — aide à la décision IMF / coopérative */
+  eligible: z.boolean().optional(),
+  segment: z.string().nullable().optional(),
+  threshold: z.number().int().min(0).max(100).nullable().optional(),
+  criteria: CreditRiskCriteriaSchema.nullable().optional(),
+  featuresSnapshot: z.record(z.unknown()).nullable().optional(),
+  motifDecision: z.string().nullable().optional(),
+  outcome: z.string().nullable().optional(),
 });
 export type CreditApplication = z.infer<typeof CreditApplicationSchema>;
 

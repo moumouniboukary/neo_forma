@@ -1,9 +1,7 @@
 /**
  * USSD — passerelle Africa's Talking (ou compatible).
- * POST /ussd/webhook reçoit sessionId/serviceCode/phoneNumber/text en
- * application/x-www-form-urlencoded (standard AT) ou JSON équivalent.
- * Réponse texte brut CON (continue le menu) / END (ferme la session).
- * Menu stub : 1 = ventes du mois, 2 = NeoScore, 3 = dettes ouvertes.
+ * POST /ussd/webhook — form-urlencoded AT ou JSON.
+ * Menu : ventes, score, dettes, offre crédit, statut demande, KYC.
  */
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import querystring from "node:querystring";
@@ -16,7 +14,6 @@ type UssdBody = {
   text?: string;
 };
 
-/** Retrouve un travailleur en tolérant les variations d'espacement du numéro (E.164 AT vs format local). */
 async function findTravailleurByPhone(app: FastifyInstance, rawPhone: string) {
   const digits = rawPhone.replace(/\D/g, "");
   if (!digits) return null;
@@ -42,11 +39,17 @@ function menuText(): string {
     "1. Ventes du mois",
     "2. Mon NeoScore",
     "3. Mes dettes ouvertes",
+    "4. Offre de credit",
+    "5. Statut demande credit",
+    "6. Statut KYC",
   ].join("\n");
 }
 
+function fmt(n: number): string {
+  return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
 export const ussdRoutes: FastifyPluginAsync = async (app) => {
-  // Africa's Talking poste en x-www-form-urlencoded — parseur scopé à ce module.
   app.addContentTypeParser(
     "application/x-www-form-urlencoded",
     { parseAs: "string" },
@@ -96,7 +99,9 @@ export const ussdRoutes: FastifyPluginAsync = async (app) => {
           select: { montantFcfa: true },
         });
         const total = sales.reduce((s, o) => s + o.montantFcfa, 0);
-        return reply.send(`END Ventes du mois : ${total} FCFA (${sales.length} opé.)`);
+        return reply.send(
+          `END Ventes du mois : ${fmt(total)} FCFA (${sales.length} ope.)`
+        );
       }
       case "2": {
         const { ScoringService } = await import("../scoring/service.js");
@@ -104,7 +109,7 @@ export const ussdRoutes: FastifyPluginAsync = async (app) => {
         const score = await scoring.getCurrent(travailleur.id);
         return reply.send(
           `END NeoScore : ${score.score}/100 (segment ${score.segment}) — ${
-            score.eligible ? "éligible crédit" : "non éligible"
+            score.eligible ? "eligible credit" : "non eligible"
           }`
         );
       }
@@ -121,10 +126,48 @@ export const ussdRoutes: FastifyPluginAsync = async (app) => {
           (s, o) => s + Math.max(0, o.montantFcfa - (o.montantRegleFcfa ?? 0)),
           0
         );
-        return reply.send(`END Dettes ouvertes : ${total} FCFA (${debts.length})`);
+        return reply.send(
+          `END Dettes ouvertes : ${fmt(total)} FCFA (${debts.length})`
+        );
+      }
+      case "4": {
+        const offre = await app.prisma.offreCredit.findFirst({
+          where: { travailleurId: travailleur.id },
+          orderBy: { createdAt: "desc" },
+        });
+        if (!offre) {
+          return reply.send(
+            "END Aucune offre. Ouvrez l'app pour activer votre NeoScore."
+          );
+        }
+        return reply.send(
+          `END Offre indicative : ${fmt(offre.montantSuggereFcfa)} FCFA ` +
+            `(min ${fmt(offre.montantMinFcfa)} - max ${fmt(offre.montantMaxFcfa)})`
+        );
+      }
+      case "5": {
+        const demande = await app.prisma.demandeCredit.findFirst({
+          where: { travailleurId: travailleur.id },
+          orderBy: { createdAt: "desc" },
+        });
+        if (!demande) {
+          return reply.send("END Aucune demande de credit en cours.");
+        }
+        return reply.send(
+          `END Demande ${demande.reference} : ${demande.statut}` +
+            (demande.motifDecision ? ` — ${demande.motifDecision}` : "")
+        );
+      }
+      case "6": {
+        const kyc = travailleur.kycStatut ?? "non_verifie";
+        const tip =
+          kyc === "verifie"
+            ? "Identite verifiee."
+            : "Completez piece d'identite dans Profil (app).";
+        return reply.send(`END KYC : ${kyc}. ${tip}`);
       }
       default:
-        return reply.send("END Choix invalide.");
+        return reply.send("END Choix invalide. Rappelez pour le menu.");
     }
   });
 };

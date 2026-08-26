@@ -5,6 +5,7 @@ import {
   CaJournalierSchema,
   CompteBancaireSchema,
   MobileMoneySchema,
+  SaisonnaliteSchema,
 } from "./profile.js";
 
 export const PhoneSchema = z
@@ -18,7 +19,7 @@ export const UserProfileSchema = z.object({
   phone: PhoneSchema,
   displayName: z.string().min(1).max(120),
   language: LanguageSchema.default("fr"),
-  theme: z.enum(["light", "dark"]).default("dark"),
+  theme: z.enum(["light", "dark", "system"]).default("system"),
   metier: MetierSchema.optional(),
   anciennete: AncienneteSchema.optional(),
   caJour: CaJournalierSchema.optional(),
@@ -28,11 +29,23 @@ export const UserProfileSchema = z.object({
   compte: CompteBancaireSchema.optional(),
   city: z.string().optional(),
   zone: z.string().optional(),
+  chargesFixesMensuelles: z.number().int().nonnegative().optional(),
+  saisonnalite: SaisonnaliteSchema.optional(),
+  garantieSolidaire: z.boolean().optional(),
   consentAnonymized: z.boolean().default(true),
   consentCreditPartners: z.boolean().default(false),
   consentMarketing: z.boolean().default(false),
   onboardingCompleted: z.boolean().default(false),
   statutCompte: z.enum(["brouillon", "actif", "suspendu"]).optional(),
+  kycStatut: z
+    .enum(["non_verifie", "en_cours", "verifie", "refuse"])
+    .optional(),
+  pieceIdentiteType: z
+    .enum(["cni", "passport", "consulaire", "autre"])
+    .optional(),
+  pieceIdentiteNumero: z.string().optional(),
+  dateNaissance: z.string().datetime().optional(),
+  adresse: z.string().optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });

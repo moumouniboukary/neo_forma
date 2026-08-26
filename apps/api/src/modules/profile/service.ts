@@ -71,7 +71,7 @@ export class ProfileService {
         langue,
         modeIconographique: false,
         assistanceVocaleActive: false,
-        theme: "dark",
+        theme: "system",
         fuseau: "Africa/Ouagadougou",
       },
       update: {},
@@ -84,9 +84,35 @@ export class ProfileService {
   ): Promise<TravailleurMe> {
     await this.assertExists(travailleurId);
 
-    const identityData: { nomAffiche?: string; genre?: string | null } = {};
+    const identityData: {
+      nomAffiche?: string;
+      genre?: string | null;
+      kycStatut?: string;
+      pieceIdentiteType?: string | null;
+      pieceIdentiteNumero?: string | null;
+      dateNaissance?: Date | null;
+      adresse?: string | null;
+    } = {};
     if (input.displayName !== undefined) identityData.nomAffiche = input.displayName;
     if (input.genre !== undefined) identityData.genre = input.genre;
+    if (input.kycStatut !== undefined) identityData.kycStatut = input.kycStatut;
+    if (input.pieceIdentiteType !== undefined) {
+      identityData.pieceIdentiteType = input.pieceIdentiteType;
+    }
+    if (input.pieceIdentiteNumero !== undefined) {
+      identityData.pieceIdentiteNumero = input.pieceIdentiteNumero;
+    }
+    if (input.dateNaissance !== undefined) {
+      identityData.dateNaissance = new Date(input.dateNaissance);
+    }
+    if (input.adresse !== undefined) identityData.adresse = input.adresse;
+    // Soumission pièce → passe en « en_cours » si encore non vérifié.
+    if (
+      (input.pieceIdentiteNumero || input.pieceIdentiteType) &&
+      input.kycStatut === undefined
+    ) {
+      identityData.kycStatut = "en_cours";
+    }
 
     if (Object.keys(identityData).length > 0) {
       await this.prisma.travailleur.update({
@@ -137,10 +163,32 @@ export class ProfileService {
     const identityData: {
       nomAffiche?: string;
       genre?: string | null;
+      kycStatut?: string;
+      pieceIdentiteType?: string | null;
+      pieceIdentiteNumero?: string | null;
+      dateNaissance?: Date | null;
+      adresse?: string | null;
     } = {};
 
     if (input.displayName !== undefined) identityData.nomAffiche = input.displayName;
     if (input.genre !== undefined) identityData.genre = input.genre;
+    if (input.kycStatut !== undefined) identityData.kycStatut = input.kycStatut;
+    if (input.pieceIdentiteType !== undefined) {
+      identityData.pieceIdentiteType = input.pieceIdentiteType;
+    }
+    if (input.pieceIdentiteNumero !== undefined) {
+      identityData.pieceIdentiteNumero = input.pieceIdentiteNumero;
+    }
+    if (input.dateNaissance !== undefined) {
+      identityData.dateNaissance = new Date(input.dateNaissance);
+    }
+    if (input.adresse !== undefined) identityData.adresse = input.adresse;
+    if (
+      (input.pieceIdentiteNumero || input.pieceIdentiteType) &&
+      input.kycStatut === undefined
+    ) {
+      identityData.kycStatut = "en_cours";
+    }
 
     if (
       input.consentAnonymized !== undefined ||
@@ -246,6 +294,9 @@ export class ProfileService {
       compte?: string;
       city?: string;
       zone?: string;
+      chargesFixesMensuelles?: number;
+      saisonnalite?: string;
+      garantieSolidaire?: boolean;
     }
   ): Promise<void> {
     const data = {
@@ -264,6 +315,13 @@ export class ProfileService {
       ...(input.compte !== undefined ? { statutCompteBancaire: input.compte } : {}),
       ...(input.city !== undefined ? { ville: input.city } : {}),
       ...(input.zone !== undefined ? { zone: input.zone } : {}),
+      ...(input.chargesFixesMensuelles !== undefined
+        ? { chargesFixesMensuelles: input.chargesFixesMensuelles }
+        : {}),
+      ...(input.saisonnalite !== undefined ? { saisonnalite: input.saisonnalite } : {}),
+      ...(input.garantieSolidaire !== undefined
+        ? { garantieSolidaire: input.garantieSolidaire }
+        : {}),
     };
 
     if (Object.keys(data).length === 0) return;

@@ -42,7 +42,15 @@ export const config = {
   /**
    * URL du service ML NeoScore (ex. http://localhost:8000).
    * Vide = heuristique TypeScript uniquement.
+   * Accepte un host nu (Render `fromService.property: host`) → https://…
    */
-  scoringMlUrl: process.env.SCORING_ML_URL ?? "",
+  scoringMlUrl: normalizeScoringMlUrl(process.env.SCORING_ML_URL ?? ""),
   scoringMlTimeoutMs: Number(process.env.SCORING_ML_TIMEOUT_MS ?? 2500),
 };
+
+function normalizeScoringMlUrl(raw: string): string {
+  const u = raw.trim().replace(/\/$/, "");
+  if (!u) return "";
+  if (/^https?:\/\//i.test(u)) return u;
+  return `https://${u}`;
+}

@@ -1,6 +1,7 @@
 import bcrypt from "bcryptjs";
 import type { PrismaClient, Session, Travailleur } from "@prisma/client";
 import type { OtpPurpose } from "@neoforma/shared";
+import { normalizeLanguage } from "@neoforma/shared";
 import { identityConfig } from "./config.js";
 import {
   generateFamilyId,
@@ -259,7 +260,7 @@ export class IdentityService {
     }
 
     const pinHash = await bcrypt.hash(input.pin, identityConfig.bcryptRounds);
-    const langue = input.language ?? "fr";
+    const langue = normalizeLanguage(input.language);
     return this.prisma.travailleur.create({
       data: {
         telephone,

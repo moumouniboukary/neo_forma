@@ -19,6 +19,12 @@ model Travailleur {
   /// Verrouillage temporaire PIN (OWASP / UML MFA)
   pinFailCount          Int       @default(0)
   pinLockedUntil        DateTime?
+  /// KYC léger — non_verifie | en_cours | verifie | refuse
+  kycStatut             String    @default("non_verifie")
+  pieceIdentiteType     String?
+  pieceIdentiteNumero   String?
+  dateNaissance         DateTime?
+  adresse               String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -37,9 +43,26 @@ model Travailleur {
   articlesStock        ArticleStock[]
   tontines             Tontine[]
   notifications        NotificationInApp[]
+  pushTokens           DevicePushToken[]
   agentDossiers        AgentDossier[]
 
   @@map("travailleurs")
+}
+
+/// Jetons FCM (Android) / APNs via FCM (iOS) pour push distant.
+model DevicePushToken {
+  id            String   @id @default(uuid())
+  travailleurId String
+  token         String
+  platform      String   @default("android")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  travailleur Travailleur @relation(fields: [travailleurId], references: [id], onDelete: Cascade)
+
+  @@unique([travailleurId, token])
+  @@index([travailleurId])
+  @@map("device_push_tokens")
 }
 
 model ProfilActivite {
@@ -54,6 +77,10 @@ model ProfilActivite {
   statutCompteBancaire String?
   ville                String?
   zone                 String?
+  chargesFixesMensuelles Int?
+  /// stable | moderee | forte
+  saisonnalite         String?  @default("stable")
+  garantieSolidaire    Boolean? @default(false)
   createdAt            DateTime @default(now())
   updatedAt            DateTime @updatedAt
 
@@ -68,7 +95,7 @@ model Preferences {
   langue                 String   @default("fr")
   modeIconographique     Boolean  @default(false)
   assistanceVocaleActive Boolean  @default(false)
-  theme                  String   @default("dark")
+  theme                  String   @default("system")
   fuseau                 String   @default("Africa/Ouagadougou")
   updatedAt              DateTime @updatedAt
 

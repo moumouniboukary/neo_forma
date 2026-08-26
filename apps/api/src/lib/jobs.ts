@@ -1,6 +1,11 @@
 import { getRedis } from "./redis.js";
 
-export type JobKind = "sms" | "alert" | "mm_transfer" | "overdue_notify";
+export type JobKind =
+  | "sms"
+  | "alert"
+  | "mm_transfer"
+  | "overdue_notify"
+  | "fcm_push";
 
 export type JobPayload = {
   kind: JobKind;

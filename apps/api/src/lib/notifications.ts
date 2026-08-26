@@ -1,4 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { enqueueOrRun } from "./jobs.js";
+import { isFcmConfigured, sendFcmToToken } from "./fcm.js";
 
 export type NotifyInput = {
   travailleurId: string;
@@ -8,11 +10,41 @@ export type NotifyInput = {
   meta?: Prisma.InputJsonValue;
 };
 
+async function pushToDevices(
+  prisma: PrismaClient,
+  travailleurId: string,
+  titre: string,
+  corps: string,
+  type: string
+): Promise<void> {
+  if (!isFcmConfigured()) return;
+  const tokens = await prisma.devicePushToken.findMany({
+    where: { travailleurId },
+    select: { token: true },
+  });
+  for (const row of tokens) {
+    await enqueueOrRun(
+      "fcm_push",
+      { token: row.token, title: titre, body: corps, type },
+      async () => {
+        const result = await sendFcmToToken(row.token, {
+          title: titre,
+          body: corps,
+          data: { type },
+        });
+        if (!result.ok) {
+          console.warn(`[fcm] ${result.error}`);
+        }
+      }
+    );
+  }
+}
+
 export async function createNotification(
   prisma: PrismaClient,
   input: NotifyInput
 ) {
-  return prisma.notificationInApp.create({
+  const row = await prisma.notificationInApp.create({
     data: {
       travailleurId: input.travailleurId,
       type: input.type,
@@ -21,6 +53,14 @@ export async function createNotification(
       meta: input.meta ?? undefined,
     },
   });
+  void pushToDevices(
+    prisma,
+    input.travailleurId,
+    input.titre,
+    input.corps,
+    input.type
+  ).catch((err) => console.warn("[fcm] dispatch", err));
+  return row;
 }
 
 /** Crée une notif par créance en retard (idempotent ~1 / jour / créance). */

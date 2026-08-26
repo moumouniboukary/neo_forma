@@ -79,11 +79,12 @@ E2E device (Maestro) : `npm run mobile:e2e` — voir `apps/mobile/e2e/`.
 Pipeline optionnel : service Python + labels remboursement. Voir [`ml-scoring.md`](ml-scoring.md).
 
 ```bash
-cd services/neoscore && uvicorn main:app --port 8000
+npm run ml:up
 # apps/api/.env → SCORING_ML_URL=http://localhost:8000
 ```
 
-Sur Render : déployer `services/neoscore/Dockerfile`, puis renseigner `SCORING_ML_URL` sur `neoforma-api`.
+Sur Render : `render.yaml` crée `neoforma-ml` et injecte automatiquement
+`SCORING_ML_URL` (host du service ML) sur `neoforma-api`.
 
 ## Santé & métriques
 
@@ -93,7 +94,7 @@ Sur Render : déployer `services/neoscore/Dockerfile`, puis renseigner `SCORING_
 | `GET /ready` | Readiness : Postgres obligatoire, Redis si `REDIS_URL` |
 | `GET /metrics` | Prometheus (compteurs HTTP, latences, uptime) |
 
-Configurer le health check Render/Fly sur `/health` (liveness) ou `/ready` (readiness).
+Health check Render : **`/health`** (le process répond). Ne pas utiliser `/ready` comme sonde Render : une base encore endormie renvoyait 503 et faisait tuer l’instance (`Exited with status 1`). `/ready` reste utile pour un diagnostic manuel.
 
 Scraper `/metrics` avec Prometheus / Grafana Cloud. Sentry reste optionnel via `SENTRY_DSN`.
 

@@ -347,6 +347,8 @@ model MlModelRun {
   auc          Float?
   source       String   @default("mixed")
   notes        String?
+  /// Calibration DigiCoop / métadonnées modèle (JSON).
+  payloadJson  Json?
   active       Boolean  @default(false)
 
   @@index([trainedAt])
@@ -561,6 +563,13 @@ model AgentDossier {
   statut                String    @default("soumise")
   motifDecision         String?
   decidedAt             DateTime?
+  /// rembourse_ok | defaut | en_cours | null (non labellisé)
+  outcome               String?
+  outcomeAt             DateTime?
+  outcomeNote           String?
+  /// expert_scorecard | calibrated_scorecard | ml_assisted
+  engine                String    @default("expert_scorecard")
+  modelVersion          String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -569,5 +578,6 @@ model AgentDossier {
   @@index([agentUserId, createdAt])
   @@index([statut])
   @@index([recommendation])
+  @@index([outcome])
   @@map("agent_dossiers")
 }

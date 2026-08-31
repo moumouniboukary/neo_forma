@@ -162,8 +162,19 @@ export const AgentScoreResultSchema = z.object({
   echeanceEstimeeFcfa: asInt.nonnegative(),
   revenuMensuelFcfa: asInt.nonnegative(),
   computedAt: z.string().min(10),
+  /** expert_scorecard | calibrated_scorecard | ml_assisted */
+  engine: z.string().max(64).optional(),
+  modelVersion: z.string().max(120).nullable().optional(),
 });
 export type AgentScoreResult = z.infer<typeof AgentScoreResultSchema>;
+
+/** Label de remboursement pour recalibrage statistique. */
+export const AgentDossierOutcomeSchema = z.enum([
+  "rembourse_ok",
+  "defaut",
+  "en_cours",
+]);
+export type AgentDossierOutcome = z.infer<typeof AgentDossierOutcomeSchema>;
 
 /** Payload sync dossier agent (saisie + résultat figé). */
 export const CreateAgentDossierSchema = z.object({

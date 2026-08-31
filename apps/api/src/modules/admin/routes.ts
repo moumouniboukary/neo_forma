@@ -17,6 +17,8 @@ import { hashPartnerApiKey } from "../../lib/partner-keys.js";
 import { enqueueOrRun } from "../../lib/jobs.js";
 import { LedgerService, isLedgerError } from "../ledger/service.js";
 import { CreateOperationSchema, CreateClientSchema } from "@neoforma/shared";
+import { AgentDossierService } from "./agent-dossiers.js";
+import { bootstrapAgentCalibration } from "./bootstrap-agent-calibration.js";
 
 const RetrainSchema = z.object({
   nSynthetic: z.number().int().min(0).max(5000).optional().default(200),
@@ -25,6 +27,11 @@ const RetrainSchema = z.object({
 const OutcomeSchema = z.object({
   outcome: z.enum(["rembourse_ok", "defaut"]),
   motif: z.string().max(500).optional(),
+});
+
+const AgentOutcomeSchema = z.object({
+  outcome: z.enum(["rembourse_ok", "defaut", "en_cours"]),
+  note: z.string().max(500).optional(),
 });
 
 const ApiKeySchema = z.object({
@@ -40,6 +47,7 @@ const AssistSchema = z.object({
 export const adminRoutes: FastifyPluginAsync = async (app) => {
   const credit = new CreditService(app.prisma);
   const ledger = new LedgerService(app.prisma);
+  const agentDossiers = new AgentDossierService(app.prisma);
 
   app.addHook("preHandler", async (request, reply) => {
     if (!requireAdminKey(request, reply)) return reply;
@@ -361,5 +369,130 @@ export const adminRoutes: FastifyPluginAsync = async (app) => {
       take: 50,
     });
     return { items };
+  });
+
+  // ——— DigiCoop / TeriyaScore : labels + recalibrage scorecard ———
+
+  /** Liste des dossiers agent (pour labelliser les remboursements). */
+  app.get("/agent-dossiers", async (request) => {
+    const q = request.query as { outcome?: string; limit?: string };
+    const items = await agentDossiers.list({
+      outcome: q.outcome,
+      limit: Number(q.limit ?? 100),
+    });
+    return { items, count: items.length };
+  });
+
+  /** Pose un label rembourse_ok / defaut / en_cours. */
+  app.patch("/agent-dossiers/:id/outcome", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = AgentOutcomeSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: "validation",
+        message: "Body invalide",
+        details: parsed.error.flatten(),
+      });
+    }
+    try {
+      const row = await agentDossiers.setOutcome(
+        id,
+        parsed.data.outcome,
+        parsed.data.note
+      );
+      return { ok: true, dossier: row };
+    } catch (err) {
+      const e = err as { statusCode?: number; code?: string; message?: string };
+      if (e.statusCode === 404) {
+        return reply.status(404).send({
+          error: e.code ?? "not_found",
+          message: e.message ?? "Dossier introuvable",
+        });
+      }
+      throw err;
+    }
+  });
+
+  /** Dataset labellisé pour calibrage DigiCoop. */
+  app.get("/agent-score/dataset", async (request) => {
+    const q = request.query as { limit?: string };
+    const samples = await agentDossiers.exportLabeledSamples(
+      Number(q.limit ?? 2000)
+    );
+    return {
+      count: samples.length,
+      nDefaults: samples.filter((s) => s.outcome === "defaut").length,
+      nGoods: samples.filter((s) => s.outcome === "rembourse_ok").length,
+      samples,
+    };
+  });
+
+  /** Calibration active (poids statistiques) ou null = expert. */
+  app.get("/agent-score/calibration", async () => {
+    const calibration = await agentDossiers.getActiveCalibration();
+    return {
+      active: Boolean(calibration),
+      engine: calibration?.engine ?? "expert_scorecard",
+      calibration,
+    };
+  });
+
+  /**
+   * Recalibre le scorecard DigiCoop (logistique → poids) et active la version.
+   * Min. 20 labels dont ≥3 rembourse_ok et ≥3 defaut.
+   */
+  app.post("/agent-score/calibrate", async (request, reply) => {
+    const body = z
+      .object({ notes: z.string().max(500).optional() })
+      .safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({
+        error: "validation",
+        message: "Body invalide",
+        details: body.error.flatten(),
+      });
+    }
+    try {
+      const result = await agentDossiers.calibrateAndActivate({
+        notes: body.data.notes,
+      });
+      return { ok: true, ...result };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Calibrage échoué";
+      return reply.status(400).send({
+        error: "calibration_failed",
+        message,
+      });
+    }
+  });
+
+  /**
+   * Seed synthétique (15 bons / 10 défauts) + calibrage.
+   * À remplacer ensuite par de vrais labels DigiCoop.
+   */
+  app.post("/agent-score/bootstrap", async (request, reply) => {
+    const body = z
+      .object({ notes: z.string().max(500).optional() })
+      .safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({
+        error: "validation",
+        message: "Body invalide",
+        details: body.error.flatten(),
+      });
+    }
+    try {
+      const result = await bootstrapAgentCalibration(app.prisma, {
+        notes: body.data.notes,
+      });
+      return { ok: true, bootstrap: true, ...result };
+    } catch (err) {
+      const e = err as { statusCode?: number; code?: string; message?: string };
+      const message = e.message ?? "Bootstrap échoué";
+      return reply.status(e.statusCode ?? 400).send({
+        error: e.code ?? "bootstrap_failed",
+        message,
+      });
+    }
   });
 };

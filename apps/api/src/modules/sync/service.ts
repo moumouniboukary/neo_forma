@@ -434,6 +434,14 @@ export class SyncService {
               resultJson: result,
               note: note?.trim() || null,
               statut: "soumise",
+              engine:
+                typeof result.engine === "string"
+                  ? result.engine
+                  : "expert_scorecard",
+              modelVersion:
+                typeof result.modelVersion === "string"
+                  ? result.modelVersion
+                  : null,
             },
           });
         }

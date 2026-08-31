@@ -23,6 +23,33 @@ export const scoringRoutes: FastifyPluginAsync = async (app) => {
     }
   });
 
+  /**
+   * GET /score/agent-calibration — poids DigiCoop actifs pour l’app agent.
+   * Offline : l’app garde le dernier cache ; absent = scorecard expert.
+   */
+  app.get(
+    "/agent-calibration",
+    { preHandler: [app.authenticate] },
+    async () => {
+      const run = await app.prisma.mlModelRun.findFirst({
+        where: { source: "agent_scorecard", active: true },
+        orderBy: { trainedAt: "desc" },
+      });
+      if (!run?.payloadJson) {
+        return {
+          active: false,
+          engine: "expert_scorecard",
+          calibration: null,
+        };
+      }
+      return {
+        active: true,
+        engine: "calibrated_scorecard",
+        calibration: run.payloadJson,
+      };
+    }
+  );
+
   /** POST /score/recalculate — force recalcul (ML si SCORING_ML_URL) */
   app.post(
     "/recalculate",

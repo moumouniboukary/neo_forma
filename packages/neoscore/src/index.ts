@@ -358,3 +358,13 @@ export {
   LOAN_DURATION_MONTHS,
   LOAN_MONTHLY_RATE,
 };
+
+export {
+  computeAgentScorecard,
+  type AgentScoreCalibration,
+} from "./agent-scorecard.js";
+export {
+  calibrateAgentScorecard,
+  extractAgentFeatureVector,
+  type AgentLabeledSample,
+} from "./calibrate-agent-scorecard.js";

@@ -1,6 +1,8 @@
 import type { OperationHorsLigne, PrismaClient } from "@prisma/client";
 import type { CreateOperation, SyncMutation } from "@neoforma/shared";
+import { normalizeStockUnit } from "@neoforma/shared";
 import { toArticleStock, toClient, toOperation } from "../../lib/mappers.js";
+import { toQty } from "../../lib/qty.js";
 import { LedgerService, isLedgerError } from "../ledger/service.js";
 import { ProfileService, isProfileError } from "../profile/service.js";
 import { ConsentService, isConsentError } from "../consent/service.js";
@@ -381,9 +383,9 @@ export class SyncService {
           await this.prisma.articleStock.update({
             where: { id: existing.id },
             data: {
-              quantite: existing.quantite + (mutation.payload.quantite ?? 0),
+              quantite: toQty(existing.quantite) + (mutation.payload.quantite ?? 0),
               ...(mutation.payload.unite
-                ? { unite: mutation.payload.unite }
+                ? { unite: normalizeStockUnit(mutation.payload.unite) }
                 : {}),
               ...(mutation.payload.prixUnitaireFcfa !== undefined
                 ? { prixUnitaireFcfa: mutation.payload.prixUnitaireFcfa }
@@ -395,7 +397,7 @@ export class SyncService {
             data: {
               travailleurId,
               nom,
-              unite: mutation.payload.unite ?? "u",
+              unite: normalizeStockUnit(mutation.payload.unite),
               quantite: mutation.payload.quantite ?? 0,
               prixUnitaireFcfa: mutation.payload.prixUnitaireFcfa ?? null,
             },

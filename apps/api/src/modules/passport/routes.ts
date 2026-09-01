@@ -5,6 +5,7 @@
  */
 import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { toUserProfile } from "../../lib/mappers.js";
+import { toQty } from "../../lib/qty.js";
 import { ProfileService } from "../profile/service.js";
 import { ScoringService } from "../scoring/service.js";
 
@@ -55,7 +56,7 @@ async function buildPassport(app: FastifyInstance, travailleurId: string) {
   const overdueCount = openDebts.filter((o) => o.statutCreance === "en_retard").length;
 
   const stockValueFcfa = articles.reduce(
-    (s, a) => s + a.quantite * (a.prixUnitaireFcfa ?? 0),
+    (s, a) => s + Math.round(toQty(a.quantite) * (a.prixUnitaireFcfa ?? 0)),
     0
   );
 
@@ -87,7 +88,7 @@ async function buildPassport(app: FastifyInstance, travailleurId: string) {
       valueFcfa: stockValueFcfa,
       items: articles.map((a) => ({
         nom: a.nom,
-        quantite: a.quantite,
+        quantite: toQty(a.quantite),
         unite: a.unite,
       })),
     },

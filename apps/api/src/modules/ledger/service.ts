@@ -9,7 +9,8 @@ import type {
   CreateOperation,
   UpdateClient,
 } from "@neoforma/shared";
-import { toCanonicalOperationType } from "@neoforma/shared";
+import { toCanonicalOperationType, roundQty, normalizeStockUnit } from "@neoforma/shared";
+import { toQty } from "../../lib/qty.js";
 import { createNotification } from "../../lib/notifications.js";
 import { smsGateway } from "../../lib/sms.js";
 
@@ -196,7 +197,8 @@ export class LedgerService {
         travailleurId,
         nomArticle,
         delta,
-        natureStock === "sortie"
+        natureStock === "sortie",
+        input.unite
       );
       articleStockId = article.id;
     } else if (type === "stock") {
@@ -278,7 +280,7 @@ export class LedgerService {
       throw new LedgerError("not_found", "Opération introuvable", 404);
     }
 
-    const qty = op.quantiteStock ?? 0;
+    const qty = toQty(op.quantiteStock);
     if (op.articleStockId && qty > 0) {
       if (op.type === "vente" || (op.type === "stock" && op.natureStock === "sortie")) {
         await this.adjustArticleQuantity(
@@ -305,7 +307,8 @@ export class LedgerService {
     travailleurId: string,
     nom: string,
     delta: number,
-    isSortie = false
+    isSortie = false,
+    unite?: string
   ) {
     const existing = await this.prisma.articleStock.findUnique({
       where: { travailleurId_nom: { travailleurId, nom } },
@@ -318,27 +321,33 @@ export class LedgerService {
           400
         );
       }
+      const have = toQty(existing.quantite);
       const need = Math.abs(delta);
-      if (existing.quantite < need) {
+      if (have + 1e-9 < need) {
         throw new LedgerError(
           "stock_insufficient",
-          `Stock insuffisant (dispo : ${existing.quantite})`,
+          `Stock insuffisant (dispo : ${have})`,
           400
         );
       }
       return this.prisma.articleStock.update({
         where: { id: existing.id },
-        data: { quantite: existing.quantite - need },
+        data: { quantite: roundQty(have - need) },
       });
     }
     if (existing) {
       return this.prisma.articleStock.update({
         where: { id: existing.id },
-        data: { quantite: Math.max(0, existing.quantite + delta) },
+        data: { quantite: roundQty(Math.max(0, toQty(existing.quantite) + delta)) },
       });
     }
     return this.prisma.articleStock.create({
-      data: { travailleurId, nom, quantite: Math.max(0, delta) },
+      data: {
+        travailleurId,
+        nom,
+        unite: normalizeStockUnit(unite),
+        quantite: roundQty(Math.max(0, delta)),
+      },
     });
   }
 
@@ -356,22 +365,23 @@ export class LedgerService {
       throw new LedgerError("not_found", "Article stock introuvable", 404);
     }
     if (isSortie) {
+      const have = toQty(existing.quantite);
       const need = Math.abs(delta);
-      if (existing.quantite < need) {
+      if (have + 1e-9 < need) {
         throw new LedgerError(
           "stock_insufficient",
-          `Stock insuffisant (dispo : ${existing.quantite})`,
+          `Stock insuffisant (dispo : ${have})`,
           400
         );
       }
       return this.prisma.articleStock.update({
         where: { id: existing.id },
-        data: { quantite: existing.quantite - need },
+        data: { quantite: roundQty(have - need) },
       });
     }
     return this.prisma.articleStock.update({
       where: { id: existing.id },
-      data: { quantite: Math.max(0, existing.quantite + delta) },
+      data: { quantite: roundQty(Math.max(0, toQty(existing.quantite) + delta)) },
     });
   }
 

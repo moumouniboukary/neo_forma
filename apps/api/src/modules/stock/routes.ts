@@ -1,11 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
 import { z } from "zod";
+import { QtySchema, normalizeStockUnit } from "@neoforma/shared";
 import { toArticleStock } from "../../lib/mappers.js";
+import { toQty } from "../../lib/qty.js";
 
 const CreateArticleSchema = z.object({
   nom: z.string().min(1).max(120),
   unite: z.string().max(20).optional(),
-  quantite: z.number().int().nonnegative().optional(),
+  quantite: QtySchema.optional(),
   prixUnitaireFcfa: z.number().int().nonnegative().optional(),
 });
 
@@ -13,7 +15,7 @@ const UpdateArticleSchema = z.object({
   nom: z.string().min(1).max(120).optional(),
   unite: z.string().max(20).optional(),
   /** Remplace la quantité (utiliser POST /articles pour un delta additif). */
-  quantite: z.number().int().nonnegative().optional(),
+  quantite: QtySchema.optional(),
   prixUnitaireFcfa: z.number().int().nonnegative().nullable().optional(),
 });
 
@@ -49,6 +51,7 @@ export const stockRoutes: FastifyPluginAsync = async (app) => {
       }
       const { nom, unite, quantite, prixUnitaireFcfa } = parsed.data;
       const travailleurId = request.user.sub;
+      const unit = normalizeStockUnit(unite);
       const existing = await app.prisma.articleStock.findUnique({
         where: { travailleurId_nom: { travailleurId, nom: nom.trim() } },
       });
@@ -56,8 +59,8 @@ export const stockRoutes: FastifyPluginAsync = async (app) => {
         ? await app.prisma.articleStock.update({
             where: { id: existing.id },
             data: {
-              quantite: existing.quantite + (quantite ?? 0),
-              ...(unite ? { unite } : {}),
+              quantite: toQty(existing.quantite) + (quantite ?? 0),
+              ...(unite ? { unite: unit } : {}),
               ...(prixUnitaireFcfa !== undefined ? { prixUnitaireFcfa } : {}),
             },
           })
@@ -65,7 +68,7 @@ export const stockRoutes: FastifyPluginAsync = async (app) => {
             data: {
               travailleurId,
               nom: nom.trim(),
-              unite: unite ?? "u",
+              unite: unit,
               quantite: quantite ?? 0,
               prixUnitaireFcfa: prixUnitaireFcfa ?? null,
             },
@@ -102,7 +105,7 @@ export const stockRoutes: FastifyPluginAsync = async (app) => {
         where: { id },
         data: {
           ...(nom !== undefined ? { nom: nom.trim() } : {}),
-          ...(unite !== undefined ? { unite } : {}),
+          ...(unite !== undefined ? { unite: normalizeStockUnit(unite) } : {}),
           ...(quantite !== undefined ? { quantite } : {}),
           ...(prixUnitaireFcfa !== undefined ? { prixUnitaireFcfa } : {}),
         },

@@ -4,6 +4,7 @@ import {
   CreateClientSchema,
   SettleCreanceSchema,
 } from "./operations.js";
+import { QtySchema } from "./qty.js";
 import { OnboardingUpdateSchema, UpdatePreferencesSchema } from "./profile.js";
 import { UpdateConsentsBatchSchema } from "./consent.js";
 import { SubmitCreditSchema } from "./credit.js";
@@ -28,7 +29,7 @@ export type SyncMutationKind = z.infer<typeof SyncMutationKindSchema>;
 export const UpsertStockMutationSchema = z.object({
   nom: z.string().min(1).max(120),
   unite: z.string().max(20).optional(),
-  quantite: z.number().int().nonnegative().optional(),
+  quantite: QtySchema.optional(),
   prixUnitaireFcfa: z.number().int().nonnegative().optional(),
 });
 export type UpsertStockMutation = z.infer<typeof UpsertStockMutationSchema>;

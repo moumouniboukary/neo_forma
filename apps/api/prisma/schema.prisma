@@ -154,7 +154,7 @@ model Operation {
   clientId               String?
   natureStock            String?
   articleStockId         String?
-  quantiteStock          Int?
+  quantiteStock          Decimal?  @db.Decimal(12, 3)
   categorieDepense       String?
   /// especes | mobile_money
   canal                  String?
@@ -472,7 +472,7 @@ model ArticleStock {
   travailleurId String
   nom           String
   unite         String   @default("u")
-  quantite      Int      @default(0)
+  quantite      Decimal  @default(0) @db.Decimal(12, 3)
   prixUnitaireFcfa Int?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

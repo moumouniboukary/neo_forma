@@ -5,6 +5,7 @@ import {
   OperationTypeSchema,
   StatutCreanceSchema,
 } from "./enums.js";
+import { PositiveQtySchema } from "./qty.js";
 
 export function toCanonicalOperationType(
   type: z.infer<typeof OperationTypeSchema>
@@ -22,11 +23,11 @@ export const OperationSchema = z.object({
   clientName: z.string().max(120).optional(),
   natureStock: NatureStockSchema.optional(),
   articleName: z.string().max(120).optional(),
-  quantity: z.number().int().positive().optional(),
+  quantity: PositiveQtySchema.optional(),
   /** Alias explicite de articleName — id de l'article stock lié. */
   articleStockId: z.string().uuid().optional(),
   /** Alias explicite de quantity. */
-  quantiteStock: z.number().int().positive().optional(),
+  quantiteStock: PositiveQtySchema.optional(),
   categorieDepense: z.string().max(80).optional(),
   dueAt: z.string().datetime().optional(),
   settledAt: z.string().datetime().nullable().optional(),
@@ -55,13 +56,15 @@ export const CreateOperationSchema = z
     clientName: z.string().max(120).optional(),
     natureStock: NatureStockSchema.optional(),
     articleName: z.string().max(120).optional(),
-    quantity: z.number().int().positive().optional(),
+    quantity: PositiveQtySchema.optional(),
     /** Référence directe à un article existant (prioritaire sur articleName/productName). */
     articleStockId: z.string().uuid().optional(),
     /** Alias explicite de quantity. */
-    quantiteStock: z.number().int().positive().optional(),
+    quantiteStock: PositiveQtySchema.optional(),
     /** Alias explicite de articleName (nouvel article ou upsert par nom). */
     productName: z.string().max(120).optional(),
+    /** Unité catalogue (u | kg | g) à la création d'article. */
+    unite: z.string().max(20).optional(),
     categorieDepense: z.string().max(80).optional(),
     /** Canal de paiement : especes | mobile_money */
     canal: z.enum(["especes", "mobile_money"]).optional(),

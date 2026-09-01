@@ -15,6 +15,7 @@ import type {
   ClientInformelDto,
 } from "@neoforma/shared";
 import { normalizeLanguage } from "@neoforma/shared";
+import { toQty } from "./qty.js";
 
 export type TravailleurWithProfile = Travailleur & {
   profilActivite?: ProfilActivite | null;
@@ -84,7 +85,7 @@ export function toArticleStock(a: {
   id: string;
   nom: string;
   unite: string;
-  quantite: number;
+  quantite: unknown;
   prixUnitaireFcfa: number | null;
   createdAt: Date;
   updatedAt: Date;
@@ -93,7 +94,7 @@ export function toArticleStock(a: {
     id: a.id,
     nom: a.nom,
     unite: a.unite,
-    quantite: a.quantite,
+    quantite: toQty(a.quantite),
     prixUnitaireFcfa: a.prixUnitaireFcfa ?? undefined,
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
@@ -116,9 +117,10 @@ export function toOperation(op: OperationWithClient): OpDto {
     clientName: op.client?.nom ?? undefined,
     natureStock: (op.natureStock as OpDto["natureStock"]) ?? undefined,
     articleName: op.articleStock?.nom ?? undefined,
-    quantity: op.quantiteStock ?? undefined,
+    quantity: op.quantiteStock == null ? undefined : toQty(op.quantiteStock),
     articleStockId: op.articleStockId ?? undefined,
-    quantiteStock: op.quantiteStock ?? undefined,
+    quantiteStock:
+      op.quantiteStock == null ? undefined : toQty(op.quantiteStock),
     categorieDepense: op.categorieDepense ?? undefined,
     canal: (op.canal as OpDto["canal"]) ?? undefined,
     dueAt: op.echeance?.toISOString(),

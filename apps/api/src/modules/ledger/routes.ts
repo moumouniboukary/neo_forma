@@ -38,9 +38,13 @@ export const ledgerOperationRoutes: FastifyPluginAsync = async (app) => {
   app.post("/", { preHandler: [app.authenticate] }, async (request, reply) => {
     const parsed = CreateOperationSchema.safeParse(request.body);
     if (!parsed.success) {
+      const first = parsed.error.issues[0];
+      const where = first?.path?.length
+        ? `${first.path.join(".")}: ${first.message}`
+        : first?.message;
       return reply.status(400).send({
         error: "validation",
-        message: "Opération invalide",
+        message: where ? `Opération invalide (${where})` : "Opération invalide",
         details: parsed.error.flatten(),
       });
     }

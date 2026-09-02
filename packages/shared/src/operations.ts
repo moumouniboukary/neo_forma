@@ -47,42 +47,76 @@ export const OperationSchema = z.object({
 });
 export type Operation = z.infer<typeof OperationSchema>;
 
-export const CreateOperationSchema = z
-  .object({
-    type: OperationTypeSchema,
-    amountFcfa: z.number().int().positive(),
-    label: z.string().max(200).optional(),
-    clientId: z.string().uuid().optional(),
-    clientName: z.string().max(120).optional(),
-    natureStock: NatureStockSchema.optional(),
-    articleName: z.string().max(120).optional(),
-    quantity: PositiveQtySchema.optional(),
-    /** Référence directe à un article existant (prioritaire sur articleName/productName). */
-    articleStockId: z.string().uuid().optional(),
-    /** Alias explicite de quantity. */
-    quantiteStock: PositiveQtySchema.optional(),
-    /** Alias explicite de articleName (nouvel article ou upsert par nom). */
-    productName: z.string().max(120).optional(),
-    /** Unité catalogue (u | kg | g) à la création d'article. */
-    unite: z.string().max(20).optional(),
-    categorieDepense: z.string().max(80).optional(),
-    /** Canal de paiement : especes | mobile_money */
-    canal: z.enum(["especes", "mobile_money"]).optional(),
-    dueAt: z.string().datetime().optional(),
-    clientMutationId: z.string().uuid().optional(),
-    createdAt: z.string().datetime().optional(),
-    dateOperation: z.string().datetime().optional(),
-  })
-  .superRefine((data, ctx) => {
-    const type = toCanonicalOperationType(data.type);
-    if (type === "creance" && !data.clientId && !data.clientName?.trim()) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Créance : clientId ou clientName requis (RM-O03)",
-        path: ["clientName"],
-      });
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** Ids mal formés / montants texte : on assainit plutôt que de rejeter toute l’op. */
+function sanitizeCreateOperation(raw: unknown): unknown {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
+  const o: Record<string, unknown> = { ...(raw as Record<string, unknown>) };
+
+  for (const key of ["articleStockId", "clientId", "clientMutationId"] as const) {
+    const v = o[key];
+    if (v == null || v === "") {
+      delete o[key];
+      continue;
     }
-  });
+    if (typeof v === "string") {
+      const s = v.trim();
+      if (UUID_RE.test(s)) o[key] = s;
+      else delete o[key];
+    }
+  }
+
+  if (typeof o.amountFcfa === "string") {
+    const n = Number(o.amountFcfa.replace(/[\s\u00a0]/g, "").replace(",", "."));
+    if (Number.isFinite(n)) o.amountFcfa = Math.round(n);
+  } else if (typeof o.amountFcfa === "number" && Number.isFinite(o.amountFcfa)) {
+    o.amountFcfa = Math.round(o.amountFcfa);
+  }
+
+  return o;
+}
+
+export const CreateOperationSchema = z.preprocess(
+  sanitizeCreateOperation,
+  z
+    .object({
+      type: OperationTypeSchema,
+      amountFcfa: z.coerce.number().int().positive(),
+      label: z.string().max(200).optional(),
+      clientId: z.string().uuid().optional(),
+      clientName: z.string().max(120).optional(),
+      natureStock: NatureStockSchema.optional(),
+      articleName: z.string().max(120).optional(),
+      quantity: PositiveQtySchema.optional(),
+      /** Référence directe à un article existant (prioritaire sur articleName/productName). */
+      articleStockId: z.string().uuid().optional(),
+      /** Alias explicite de quantity. */
+      quantiteStock: PositiveQtySchema.optional(),
+      /** Alias explicite de articleName (nouvel article ou upsert par nom). */
+      productName: z.string().max(120).optional(),
+      /** Unité catalogue (u | kg | g | l) à la création d'article. */
+      unite: z.string().max(20).optional(),
+      categorieDepense: z.string().max(80).optional(),
+      /** Canal de paiement : especes | mobile_money */
+      canal: z.enum(["especes", "mobile_money"]).optional(),
+      dueAt: z.string().datetime({ offset: true }).optional(),
+      clientMutationId: z.string().uuid().optional(),
+      createdAt: z.string().datetime({ offset: true }).optional(),
+      dateOperation: z.string().datetime({ offset: true }).optional(),
+    })
+    .superRefine((data, ctx) => {
+      const type = toCanonicalOperationType(data.type);
+      if (type === "creance" && !data.clientId && !data.clientName?.trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Créance : clientId ou clientName requis (RM-O03)",
+          path: ["clientName"],
+        });
+      }
+    })
+);
 export type CreateOperation = z.infer<typeof CreateOperationSchema>;
 
 export const SettleCreanceSchema = z.object({

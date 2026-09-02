@@ -11,6 +11,7 @@ RUN npm install
 
 FROM deps AS api
 WORKDIR /app
+# Cache-bust 2026-09-02 : quantités décimales (kg/g/l)
 COPY packages ./packages
 COPY apps/api ./apps/api
 WORKDIR /app/apps/api

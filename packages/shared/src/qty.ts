@@ -6,24 +6,29 @@ export function roundQty(n: number): number {
   return Math.round(n * 1000) / 1000;
 }
 
-/** "1,5" (FR) ou "1.5" → nombre. `null` / `""` laissés tels quels. */
-function parseQtyInput(v: unknown): unknown {
+function coerceQtyValue(v: unknown): number {
+  if (typeof v === "number") return roundQty(v);
   if (typeof v === "string") {
-    const s = v.replace(/[\s\u00a0]/g, "").replace(",", ".");
-    return s === "" ? v : s;
+    return roundQty(Number(v.replace(/[\s\u00a0]/g, "").replace(",", ".")));
   }
-  return v;
+  return Number.NaN;
 }
 
-export const QtySchema = z.preprocess(
-  parseQtyInput,
-  z.coerce.number().finite().min(0).max(1_000_000).transform(roundQty)
-);
+/** 0 autorisé (stock à zéro). Pas d’entier obligatoire. */
+export const QtySchema = z
+  .union([z.number(), z.string()])
+  .transform(coerceQtyValue)
+  .refine((n) => Number.isFinite(n) && n >= 0 && n <= 1_000_000, {
+    message: "Quantité invalide",
+  });
 
-export const PositiveQtySchema = z.preprocess(
-  parseQtyInput,
-  z.coerce.number().finite().gt(0).max(1_000_000).transform(roundQty)
-);
+/** > 0, décimales OK (1,5 kg). */
+export const PositiveQtySchema = z
+  .union([z.number(), z.string()])
+  .transform(coerceQtyValue)
+  .refine((n) => Number.isFinite(n) && n > 0 && n <= 1_000_000, {
+    message: "Quantité invalide",
+  });
 
 export const STOCK_UNIT_VALUES = ["u", "kg", "g", "l"] as const;
 export type StockUnit = (typeof STOCK_UNIT_VALUES)[number];

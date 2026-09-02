@@ -5,7 +5,7 @@ import {
   OperationTypeSchema,
   StatutCreanceSchema,
 } from "./enums.js";
-import { PositiveQtySchema } from "./qty.js";
+import { PositiveQtySchema, roundQty } from "./qty.js";
 
 export function toCanonicalOperationType(
   type: z.infer<typeof OperationTypeSchema>
@@ -75,6 +75,21 @@ function sanitizeCreateOperation(raw: unknown): unknown {
     o.amountFcfa = Math.round(o.amountFcfa);
   }
 
+  for (const qk of ["quantity", "quantiteStock"] as const) {
+    const v = o[qk];
+    if (v == null || v === "") {
+      delete o[qk];
+      continue;
+    }
+    const n =
+      typeof v === "string"
+        ? Number(v.replace(/[\s\u00a0]/g, "").replace(",", "."))
+        : typeof v === "number"
+          ? v
+          : NaN;
+    if (Number.isFinite(n)) o[qk] = roundQty(n);
+  }
+
   return o;
 }
 
@@ -89,11 +104,11 @@ export const CreateOperationSchema = z.preprocess(
       clientName: z.string().max(120).optional(),
       natureStock: NatureStockSchema.optional(),
       articleName: z.string().max(120).optional(),
-      quantity: PositiveQtySchema.optional(),
+      quantity: z.number().gt(0).max(1_000_000).optional(),
       /** Référence directe à un article existant (prioritaire sur articleName/productName). */
       articleStockId: z.string().uuid().optional(),
       /** Alias explicite de quantity. */
-      quantiteStock: PositiveQtySchema.optional(),
+      quantiteStock: z.number().gt(0).max(1_000_000).optional(),
       /** Alias explicite de articleName (nouvel article ou upsert par nom). */
       productName: z.string().max(120).optional(),
       /** Unité catalogue (u | kg | g | l) à la création d'article. */

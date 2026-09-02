@@ -4,7 +4,7 @@ export const identityConfig = {
   /** Preuve OTP JWT après verify (s). */
   otpProofTtlSec: 10 * 60,
   /** Access JWT (s) — court (architecture : 15–60 min). */
-  accessTokenTtlSec: 15 * 60,
+  accessTokenTtlSec: 8 * 60 * 60,
   /** Refresh opaque TTL (ms). */
   refreshTokenTtlMs: 7 * 24 * 60 * 60 * 1000,
   otpMaxAttempts: 5,

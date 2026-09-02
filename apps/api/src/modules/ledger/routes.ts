@@ -1,12 +1,15 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import {
   CreateClientSchema,
-  CreateOperationSchema,
   SettleCreanceSchema,
   UpdateClientSchema,
   UpdateDueDateSchema,
 } from "@neoforma/shared";
 import { toClient, toOperation } from "../../lib/mappers.js";
+import {
+  formatCreateOpError,
+  parseCreateOperation,
+} from "../../lib/parse-operation.js";
 import { isLedgerError, LedgerService } from "./service.js";
 
 function sendLedgerError(reply: FastifyReply, err: unknown) {
@@ -36,15 +39,11 @@ export const ledgerOperationRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post("/", { preHandler: [app.authenticate] }, async (request, reply) => {
-    const parsed = CreateOperationSchema.safeParse(request.body);
+    const parsed = parseCreateOperation(request.body);
     if (!parsed.success) {
-      const first = parsed.error.issues[0];
-      const where = first?.path?.length
-        ? `${first.path.join(".")}: ${first.message}`
-        : first?.message;
       return reply.status(400).send({
         error: "validation",
-        message: where ? `Opération invalide (${where})` : "Opération invalide",
+        message: formatCreateOpError(parsed.error),
         details: parsed.error.flatten(),
       });
     }

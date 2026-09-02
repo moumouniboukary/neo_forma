@@ -73,6 +73,8 @@ export async function buildApp() {
     service: "neoforma-api",
     time: new Date().toISOString(),
     agentDossiers: true,
+    git: process.env.RENDER_GIT_COMMIT ?? "local",
+    qty: "decimal",
   }));
 
   await app.register(prismaPlugin);

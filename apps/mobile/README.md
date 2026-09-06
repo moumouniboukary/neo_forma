@@ -46,9 +46,10 @@ flutter run --dart-define=API_BASE=http://192.168.x.x:3001
 # Même ligne que l'APK collab (API Render)
 npm run mobile:collab
 
-# APK à envoyer au collab (code courant + API Render)
+# APK release signée (API Render) — collab / commerçants
 npm run mobile:apk
 # → NeoForma-collaborateur.apk (+ dist/apk/)
+# Désinstaller d'abord une install debug (signature différente).
 ```
 
 OTP démo : le code `devCode` s’affiche à l’écran (pas de SMS réel en local).

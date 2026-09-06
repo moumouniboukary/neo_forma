@@ -64,14 +64,12 @@ fly deploy --dockerfile Dockerfile --build-target api
 Compiler l'app en pointant sur l'API déployée :
 
 ```bash
-cd apps/mobile
-# Play Store / distribution : signer en release (pas debug)
-#   cp android/key.properties.example android/key.properties
-#   keytool -genkey -v -keystore android/upload-keystore.jks ...
-flutter build apk --release --dart-define=API_BASE=https://<votre-api>
+# APK release signée, API Render (keystore local, gitignore)
+npm run mobile:apk
+# → NeoForma-collaborateur.apk (+ dist/apk/)
 ```
 
-Sans `android/key.properties`, le build release retombe sur la signature **debug** (OK pour tests, pas pour les stores).
+Une install **debug** déjà sur le téléphone doit être désinstallée : la signature release n’est pas la même. Le keystore `apps/mobile/android/upload-keystore.jks` ne se commit pas — le conserver pour les mises à jour.
 
 E2E device (Maestro) : `npm run mobile:e2e` — voir `apps/mobile/e2e/`.
 

@@ -30,10 +30,10 @@ Sans passerelle SMS, le code OTP est renvoyé dans la réponse (`devCode`) — *
 
 1. Pousser le repo sur GitHub.
 2. [render.com](https://render.com) → **New → Blueprint** → sélectionner le repo.
-3. Render lit [`render.yaml`](../render.yaml) : crée **Postgres + Key Value** + l'API (`Dockerfile.api`), génère `JWT_SECRET`, injecte `REDIS_URL`.
-4. **Always-on :** `neoforma-api` est en `0.5c-512mb` (Starter, ~7 $/mois) pour ne pas s’endormir. `neoforma-db` est en `0.1c-256mb` (Basic-256mb, ~6 $/mois) pour ne pas expirer à 30 jours. Ajouter une carte sur Render avant le sync Blueprint. `neoforma-ml` reste Free.
-5. Renseigner dans le dashboard : `CORS_ORIGIN` (ex. `*`), et (optionnel) `TWILIO_*`, `SENTRY_DSN`, `ALERT_WEBHOOK_URL`, `PARTNER_API_KEY`.
-6. Les migrations s'appliquent seules au premier boot. Vérifier `https://<service>.onrender.com/ready`.
+3. Render lit [`render.yaml`](../render.yaml) : Redis + API (`Dockerfile.api`). La base prod est **Neon** (`DATABASE_URL` dans le dashboard, non écrasé par le Blueprint).
+4. **Always-on :** `neoforma-api` est en `0.5c-512mb` (Starter, ~7 $/mois) pour ne pas s’endormir. Ajouter une carte sur Render avant le sync Blueprint. `neoforma-ml` reste Free.
+5. Renseigner dans le dashboard : `DATABASE_URL` (Neon, URL **directe** sans `-pooler`), `CORS_ORIGIN` (ex. `*`), et (optionnel) `TWILIO_*`, `SENTRY_DSN`, `ALERT_WEBHOOK_URL`, `PARTNER_API_KEY`.
+6. Les migrations s'appliquent seules au premier boot. Vérifier `https://<service>.onrender.com/ready` → `postgres: ok`.
 
 > **Note :** Render ne supporte pas `dockerTarget` — d’où `Dockerfile.api` dédié (le `Dockerfile` multi-stage reste pour `docker compose`).
 

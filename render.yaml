@@ -1,10 +1,16 @@
 # Render Blueprint — API NeoForma + Postgres + Redis + ML solvabilité.
 # https://render.com → New → Blueprint → pointer sur ce repo.
+#
+# Always-on : Free web s’endort après 15 min d’inactivité (1er appel ~1 min).
+# Free Postgres expire à 30 jours. Starter API (~7 $/mois) + Basic-256mb DB
+# (~6 $/mois) restent allumés. Carte bancaire requise sur le compte Render.
+# ML reste Free (optionnel, peut s’endormir).
 databases:
   - name: neoforma-db
     databaseName: neoforma
     user: neoforma
-    plan: free
+    # 0.1 CPU / 256 MB — plus d’expiration 30 j. Ancien id : basic-256mb.
+    plan: 0.1c-256mb
 
 services:
   - type: keyvalue
@@ -28,7 +34,8 @@ services:
   - type: web
     name: neoforma-api
     runtime: docker
-    plan: free
+    # 0.5 CPU / 512 MB — ne s’endort pas. Ancien id : starter (~7 $/mois).
+    plan: 0.5c-512mb
     dockerfilePath: ./Dockerfile.api
     dockerContext: .
     # /health répond dès que le process écoute (avant Postgres).

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,7 +9,12 @@ import '../../core/api/client.dart';
 import '../../core/l10n/locale_provider.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/voice/voice_service.dart';
+import '../../core/widgets/nf_numeric_keypad.dart';
+import '../../core/widgets/nf_speak_button.dart';
 import '../../core/widgets/nf_widgets.dart';
+import '../sync/sync_service.dart';
+import 'app_lock.dart';
 import 'auth_provider.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
@@ -23,11 +30,31 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   final otpCtrl = TextEditingController();
   final pinCtrl = TextEditingController();
   final nameCtrl = TextEditingController();
+  String phoneDigits = '';
   String language = 'fr';
   String? otpToken;
   String? devCode;
   String? error;
   bool loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    language = ref.read(uxPrefsProvider).language;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(uxPrefsProvider.notifier).setIconModeLocal(true);
+      ref.read(uxPrefsProvider.notifier).setVoiceAssistLocal(true);
+      _speakStep();
+    });
+  }
+
+  void _setPhoneDigits(String d) {
+    setState(() {
+      phoneDigits = d;
+      phoneCtrl.text = NfPhoneEntry.toE164(d);
+      error = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -36,6 +63,20 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
     pinCtrl.dispose();
     nameCtrl.dispose();
     super.dispose();
+  }
+
+  String get _stepKey =>
+      step == 0 ? 'phoneEnter' : step == 1 ? 'smsCode' : 'displayName';
+
+  Future<void> _speakStep() async {
+    if (!mounted) return;
+    if (!ref.read(uxPrefsProvider).voiceAssist) return;
+    await ref.read(voiceServiceProvider).speakKey(_stepKey);
+  }
+
+  void _setStep(int next) {
+    setState(() => step = next);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _speakStep());
   }
 
   Future<void> _sendOtp() async {
@@ -49,10 +90,24 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
           .requestOtp(phoneCtrl.text.trim(), OtpPurpose.register);
       setState(() {
         devCode = res.devCode;
-        step = 1;
+        if (res.devCode != null) otpCtrl.text = res.devCode!;
       });
+      _setStep(1);
+      if (res.devCode != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final voice = ref.read(voiceServiceProvider);
+          await voice.speakKey('otpAgentHint');
+          await voice.speakText(res.devCode!.split('').join(' '));
+        });
+      }
     } on ApiException catch (e) {
-      setState(() => error = e.message);
+      setState(
+        () => error = e.isOffline
+            ? (e.message.isNotEmpty && e.message != 'Hors ligne'
+                ? e.message
+                : ref.read(nfStringsProvider)('loginNeedsNetwork'))
+            : e.message,
+      );
     } finally {
       setState(() => loading = false);
     }
@@ -71,12 +126,16 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
             otpCtrl.text.trim(),
             OtpPurpose.register,
           );
-      setState(() {
-        otpToken = token;
-        step = 2;
-      });
+      setState(() => otpToken = token);
+      _setStep(2);
     } on ApiException catch (e) {
-      setState(() => error = e.message);
+      setState(
+        () => error = e.isOffline
+            ? (e.message.isNotEmpty && e.message != 'Hors ligne'
+                ? e.message
+                : ref.read(nfStringsProvider)('loginNeedsNetwork'))
+            : e.message,
+      );
     } finally {
       setState(() => loading = false);
     }
@@ -85,10 +144,9 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
   Future<void> _register() async {
     if (otpToken == null) return;
     final name = nameCtrl.text.trim();
+    final t = ref.read(nfStringsProvider);
     if (name.length < 2) {
-      setState(
-        () => error = 'Indiquez votre prénom ou nom (2 caractères min.)',
-      );
+      setState(() => error = t('nameRequired'));
       return;
     }
     setState(() {
@@ -96,16 +154,22 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       error = null;
     });
     try {
-      await ref
-          .read(authProvider.notifier)
-          .register(
+      await ref.read(authProvider.notifier).register(
             phone: phoneCtrl.text.trim(),
             pin: pinCtrl.text.trim(),
             otpToken: otpToken!,
             displayName: name,
             language: language,
           );
+      await ref.read(appLockProvider.notifier).setupPin(pinCtrl.text.trim());
+      final lock = ref.read(appLockProvider);
+      if (lock.biometricAvailable) {
+        await ref.read(appLockProvider.notifier).setBiometricEnabled(true);
+      }
       ref.read(uxPrefsProvider.notifier).setLanguageLocal(language);
+      ref.read(uxPrefsProvider.notifier).setIconModeLocal(true);
+      ref.read(uxPrefsProvider.notifier).setVoiceAssistLocal(true);
+      unawaited(ref.read(syncServiceProvider).warmCaches());
       if (!mounted) return;
       context.go('/app');
     } on ApiException catch (e) {
@@ -117,7 +181,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
   void _handleBack() {
     if (step > 0) {
-      setState(() => step -= 1);
+      _setStep(step - 1);
       return;
     }
     if (context.canPop()) {
@@ -129,6 +193,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
 
   @override
   Widget build(BuildContext context) {
+    final t = ref.watch(nfStringsProvider);
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, _) {
@@ -137,66 +202,105 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       child: Scaffold(
         appBar: AppBar(
           leading: nfBackButton(context, onPressed: _handleBack),
-          title: const Text('Inscription'),
+          title: Text(t('register')),
+          actions: [
+            NfSpeakButton(labelKey: _stepKey, alwaysShow: true),
+          ],
         ),
         body: SafeArea(
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              const NfBrandHeader(
-                tagline: 'Créer votre cahier numérique en quelques minutes.',
-              ),
-              const SizedBox(height: 28),
               Text(
-                'Nouveau compte',
+                t('newAccount'),
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 16),
+              Text(t('chooseLanguage'),
+                  style: TextStyle(color: NfTokens.textMute)),
+              const SizedBox(height: 8),
+              NfSegmented(
+                value: language,
+                onChanged: (v) {
+                  setState(() => language = v);
+                  ref.read(uxPrefsProvider.notifier).setLanguageLocal(v);
+                  _speakStep();
+                },
+                options: NfStrings.selectableLanguages,
+              ),
+              const SizedBox(height: 16),
               if (step == 0) ...[
-                TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Téléphone'),
+                Text(t('phoneEnter'), style: TextStyle(color: NfTokens.textMute)),
+                const SizedBox(height: 8),
+                NfPhoneEntry(
+                  digits: phoneDigits,
+                  onChanged: _setPhoneDigits,
                 ),
-                if (error != null)
+                if (error != null) ...[
+                  const SizedBox(height: 8),
                   Text(error!, style: const TextStyle(color: NfTokens.danger)),
+                ],
                 const SizedBox(height: 16),
                 NfPrimaryButton(
-                  label: 'Recevoir le code',
+                  label: t('receiveCode'),
                   loading: loading,
-                  onPressed: _sendOtp,
+                  onPressed: phoneDigits.length == 8 ? _sendOtp : null,
                 ),
               ] else if (step == 1) ...[
-                TextField(
-                  controller: otpCtrl,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(labelText: 'Code SMS'),
+                Text(
+                  t('otpAgentHint'),
+                  style: TextStyle(color: NfTokens.textMute, fontSize: 13),
                 ),
-                if (devCode != null)
+                if (devCode != null) ...[
+                  const SizedBox(height: 12),
                   Container(
-                    margin: const EdgeInsets.only(top: 8),
+                    width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+                      horizontal: 16,
+                      vertical: 18,
                     ),
                     decoration: BoxDecoration(
                       color: NfTokens.card2,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: NfTokens.line),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: NfTokens.sand, width: 2),
                     ),
-                    child: Text(
-                      'Mode test · votre code est $devCode',
-                      style: const TextStyle(color: NfTokens.sand),
+                    child: Column(
+                      children: [
+                        Text(
+                          devCode!,
+                          style: const TextStyle(
+                            fontSize: 42,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 12,
+                            color: NfTokens.brandSoft,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () {
+                            ref.read(voiceServiceProvider).speakText(
+                                  devCode!.split('').join(' '),
+                                );
+                          },
+                          icon: const Icon(Icons.volume_up_outlined),
+                          label: Text(t('otpListen')),
+                        ),
+                      ],
                     ),
                   ),
+                ],
+                const SizedBox(height: 16),
+                NfPinEntry(
+                  value: otpCtrl.text,
+                  onChanged: (v) => setState(() {
+                    otpCtrl.text = v;
+                    error = null;
+                  }),
+                ),
                 if (error != null)
                   Text(error!, style: const TextStyle(color: NfTokens.danger)),
                 const SizedBox(height: 16),
                 NfPrimaryButton(
-                  label: 'Continuer',
+                  label: t('continue'),
                   loading: loading,
                   onPressed: otpCtrl.text.length == 4 ? _verify : null,
                 ),
@@ -205,42 +309,32 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                   controller: nameCtrl,
                   textCapitalization: TextCapitalization.words,
                   onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    labelText: 'Prénom / nom',
-                    hintText: 'Ex. Awa Ouédraogo',
+                  decoration: InputDecoration(
+                    labelText: t('displayName'),
+                    hintText: t('displayNameHint'),
                   ),
                 ),
                 const SizedBox(height: 16),
                 Text(
-                  'Langue',
-                  style: TextStyle(color: NfTokens.textMute),
+                  t('pinBigHint'),
+                  style: TextStyle(color: NfTokens.textMute, fontSize: 13),
                 ),
-                const SizedBox(height: 8),
-                NfSegmented(
-                  value: language,
-                  onChanged: (v) => setState(() => language = v),
-                  options: [for (final e in NfStrings.selectableLanguages) e],
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: pinCtrl,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(
-                    labelText: 'Code PIN (évitez 1234, 0000…)',
-                  ),
+                const SizedBox(height: 10),
+                NfPinEntry(
+                  value: pinCtrl.text,
+                  obscure: true,
+                  onChanged: (v) => setState(() {
+                    pinCtrl.text = v;
+                    error = null;
+                  }),
                 ),
                 if (error != null)
                   Text(error!, style: const TextStyle(color: NfTokens.danger)),
                 const SizedBox(height: 16),
                 NfPrimaryButton(
-                  label: 'Créer le compte',
+                  label: t('createAccount'),
                   loading: loading,
-                  onPressed:
-                      pinCtrl.text.length == 4 &&
+                  onPressed: pinCtrl.text.length == 4 &&
                           nameCtrl.text.trim().length >= 2
                       ? _register
                       : null,
@@ -254,7 +348,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                     context.push('/login');
                   }
                 },
-                child: const Text('Déjà un compte ? Se connecter'),
+                child: Text(t('haveAccount')),
               ),
             ],
           ),
@@ -403,10 +497,6 @@ class _ForgotPasswordPageState extends ConsumerState<ForgotPasswordPage> {
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              const NfBrandHeader(
-                tagline: 'Réinitialiser votre code PIN secret.',
-              ),
-              const SizedBox(height: 28),
               if (done) ...[
                 Text(
                   'Code PIN mis à jour',

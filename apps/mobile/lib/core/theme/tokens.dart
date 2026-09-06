@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../api/client.dart';
+import '../brand.dart';
 
 /// Tokens de marque. Surfaces selon [brightness] ; brand stable.
 /// Overrides white-label via Theme / [applyBranding].
 class NfTokens {
-  static Brightness brightness = Brightness.dark;
+  /// Défaut = luminosité téléphone (évite un flash clair sur téléphone sombre).
+  static Brightness brightness =
+      WidgetsBinding.instance.platformDispatcher.platformBrightness;
 
   static bool get isDark => brightness == Brightness.dark;
 
@@ -50,7 +54,7 @@ class NfTokens {
   /// Contraste sur boutons brand (fond sombre du texte).
   static const Color onBrand = Color(0xFF062018);
 
-  static String appName = 'NeoForma';
+  static String appName = kAppName;
   static String? logoUrl;
   static String? supportPhone;
 
@@ -61,8 +65,24 @@ class NfTokens {
   static Color get primary => primaryOverride ?? brand;
   static Color get secondary => secondaryOverride ?? brandSoft;
 
-  static void applyThemeMode(String theme) {
-    brightness = theme == 'light' ? Brightness.light : Brightness.dark;
+  /// Brightness effective pour une préférence `system` | `light` | `dark`.
+  static Brightness resolveBrightness(
+    String theme, {
+    Brightness? platformBrightness,
+  }) {
+    if (theme == 'light') return Brightness.light;
+    if (theme == 'dark') return Brightness.dark;
+    return platformBrightness ??
+        WidgetsBinding.instance.platformDispatcher.platformBrightness;
+  }
+
+  static void applyThemeMode(String theme, {Brightness? platformBrightness}) {
+    brightness = resolveBrightness(theme, platformBrightness: platformBrightness);
+  }
+
+  /// Aligne les tokens sur le Theme Material déjà résolu (source de vérité UI).
+  static void syncFromThemeBrightness(Brightness themeBrightness) {
+    brightness = themeBrightness;
   }
 
   static void applyBranding({
@@ -91,90 +111,124 @@ class NfTokens {
     if (value == null) return null;
     return Color(value);
   }
+
+  static Color _bgOf(Brightness b) =>
+      b == Brightness.dark ? _bgDark : _bgLight;
+  static Color _surfaceOf(Brightness b) =>
+      b == Brightness.dark ? _surfaceDark : _surfaceLight;
+  static Color _elevatedOf(Brightness b) =>
+      b == Brightness.dark ? _elevatedDark : _elevatedLight;
+  static Color _lineOf(Brightness b) =>
+      b == Brightness.dark ? _lineDark : _lineLight;
+  static Color _textOf(Brightness b) =>
+      b == Brightness.dark ? _textDark : _textLight;
+  static Color _textMuteOf(Brightness b) =>
+      b == Brightness.dark ? _textMuteDark : _textMuteLight;
 }
 
 /// Charge le branding distant (white-label IMF / partenaire).
-final brandingProvider = FutureProvider<void>((ref) async {
-  try {
-    final data = await ref.read(apiClientProvider).get<Map<String, dynamic>>(
-          '/branding',
-          parse: (d) => Map<String, dynamic>.from(d as Map),
-        );
-    NfTokens.applyBranding(
-      appName: data['appName']?.toString(),
-      primaryColor: data['primaryColor']?.toString(),
-      secondaryColor: data['secondaryColor']?.toString(),
-      logoUrl: data['logoUrl']?.toString(),
-      supportPhone: data['supportPhone']?.toString(),
-    );
-  } catch (_) {
-    // Défaut NeoForma
-  }
-});
+final brandingProvider = FutureProvider<void>(
+  (ref) async {
+    try {
+      final data = await ref.read(apiClientProvider).get<Map<String, dynamic>>(
+            '/branding',
+            parse: (d) => Map<String, dynamic>.from(d as Map),
+          );
+      final remoteName = data['appName']?.toString()?.trim();
+      // TeriyaScore est un produit distinct : ne jamais l'afficher dans NeoForma.
+      final isForeignBrand = remoteName != null &&
+          remoteName.toLowerCase().contains('teriya');
+      final appName =
+          (remoteName == null || remoteName.isEmpty || isForeignBrand)
+              ? kAppName
+              : remoteName;
+      NfTokens.applyBranding(
+        appName: appName,
+        primaryColor: data['primaryColor']?.toString(),
+        secondaryColor: data['secondaryColor']?.toString(),
+        logoUrl: data['logoUrl']?.toString(),
+        supportPhone: data['supportPhone']?.toString(),
+      );
+    } catch (_) {
+      // Défaut compile-time (kAppName)
+    }
+  },
+  dependencies: [apiClientProvider],
+);
 
-ThemeData buildNeoFormaTheme([Brightness brightness = Brightness.dark]) {
-  final previous = NfTokens.brightness;
-  NfTokens.brightness = brightness;
-  final theme = _buildThemeForCurrentTokens();
-  NfTokens.brightness = previous;
-  return theme;
-}
-
-ThemeData _buildThemeForCurrentTokens() {
+/// Construit un ThemeData sans muter [NfTokens.brightness] (évite un basculement
+/// sombre parasite quand light + dark sont construits dans le même build).
+ThemeData buildNeoFormaTheme([Brightness brightness = Brightness.light]) {
   final primary = NfTokens.primary;
   final secondary = NfTokens.secondary;
-  final brightness = NfTokens.brightness;
+  final bg = NfTokens._bgOf(brightness);
+  final surface = NfTokens._surfaceOf(brightness);
+  final elevated = NfTokens._elevatedOf(brightness);
+  final line = NfTokens._lineOf(brightness);
+  final text = NfTokens._textOf(brightness);
+  final textMute = NfTokens._textMuteOf(brightness);
+
   final base = ThemeData(
     useMaterial3: true,
     brightness: brightness,
-    scaffoldBackgroundColor: NfTokens.bg,
+    scaffoldBackgroundColor: bg,
     colorScheme: brightness == Brightness.dark
         ? ColorScheme.dark(
             primary: primary,
             secondary: secondary,
-            surface: NfTokens.surface,
+            surface: surface,
             error: NfTokens.danger,
             onPrimary: NfTokens.onBrand,
-            onSurface: NfTokens.text,
+            onSurface: text,
           )
         : ColorScheme.light(
             primary: primary,
             secondary: secondary,
-            surface: NfTokens.surface,
+            surface: surface,
             error: NfTokens.danger,
             onPrimary: NfTokens.onBrand,
-            onSurface: NfTokens.text,
+            onSurface: text,
           ),
   );
 
   return base.copyWith(
     textTheme: GoogleFonts.figtreeTextTheme(base.textTheme).apply(
-      bodyColor: NfTokens.text,
-      displayColor: NfTokens.text,
+      bodyColor: text,
+      displayColor: text,
     ),
     primaryTextTheme: GoogleFonts.syneTextTheme(base.primaryTextTheme),
     appBarTheme: AppBarTheme(
-      backgroundColor: NfTokens.bg,
-      foregroundColor: NfTokens.text,
+      backgroundColor: bg,
+      foregroundColor: text,
       elevation: 0,
+      systemOverlayStyle: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness:
+            brightness == Brightness.light ? Brightness.dark : Brightness.light,
+        statusBarBrightness:
+            brightness == Brightness.light ? Brightness.light : Brightness.dark,
+        systemNavigationBarColor: bg,
+        systemNavigationBarIconBrightness:
+            brightness == Brightness.light ? Brightness.dark : Brightness.light,
+      ),
       titleTextStyle: GoogleFonts.syne(
         fontSize: 22,
         fontWeight: FontWeight.w700,
-        color: NfTokens.text,
+        color: text,
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: NfTokens.elevated,
-      hintStyle: TextStyle(color: NfTokens.textMute),
-      labelStyle: TextStyle(color: NfTokens.textMute),
+      fillColor: elevated,
+      hintStyle: TextStyle(color: textMute),
+      labelStyle: TextStyle(color: textMute),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: NfTokens.line),
+        borderSide: BorderSide(color: line),
       ),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: NfTokens.line),
+        borderSide: BorderSide(color: line),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -197,17 +251,17 @@ ThemeData _buildThemeForCurrentTokens() {
       style: TextButton.styleFrom(foregroundColor: secondary),
     ),
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
-      backgroundColor: NfTokens.surface,
+      backgroundColor: surface,
       selectedItemColor: primary,
-      unselectedItemColor: NfTokens.textMute,
+      unselectedItemColor: textMute,
       type: BottomNavigationBarType.fixed,
     ),
     cardTheme: CardThemeData(
-      color: NfTokens.elevated,
+      color: elevated,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(14),
-        side: BorderSide(color: NfTokens.line),
+        side: BorderSide(color: line),
       ),
     ),
   );

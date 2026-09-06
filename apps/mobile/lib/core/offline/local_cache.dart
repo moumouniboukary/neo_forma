@@ -19,6 +19,12 @@ class LocalCacheKeys {
   static const notifications = 'notifications';
   static const score = 'score';
   static const uxPrefs = 'ux_prefs';
+  /// Profil / KYC (dernière réponse `/me` ou brouillon hors ligne).
+  static const profile = 'profile';
+  /// Astuce d'accueil masquée par l'utilisateur.
+  static const homeTipDismissed = 'home_tip_dismissed';
+  /// Catalogue produits vendus (revente rapide).
+  static const saleProducts = 'sale_products';
 }
 
 class LocalCache {
@@ -60,6 +66,8 @@ class LocalCache {
   Future<void> putMap(String key, Map<String, dynamic> value) async {
     await _box.put(key, jsonEncode(value));
   }
+
+  bool hasKey(String key) => _box.containsKey(key);
 
   /// Fusionne une liste entrante dans le cache existant par `id`
   /// (utilisé pour merger les pulls incrémentaux opérations/clients).

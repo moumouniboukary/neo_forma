@@ -1,7 +1,7 @@
 name: neoforma
 description: NeoForma — inclusion financière, secteur informel Burkina Faso
 publish_to: "none"
-version: 0.1.0+1
+version: 0.1.1+2
 
 environment:
   sdk: ^3.12.2
@@ -37,8 +37,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/branding/
     - assets/audio/
     - assets/audio/fr/
     - assets/audio/mr/
-    - assets/audio/dl/
-    - assets/audio/ff/

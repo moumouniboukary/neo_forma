@@ -5,15 +5,15 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/api/client.dart';
+import '../../core/offline/local_cache.dart';
 import '../../core/l10n/locale_provider.dart';
 import '../../core/l10n/strings.dart';
 import '../../core/offline/queue.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/utils/parse.dart';
 import '../../core/widgets/nf_speak_button.dart';
 import '../../core/widgets/nf_widgets.dart';
-import 'auth/app_lock.dart';
 import 'auth/auth_provider.dart';
-import 'notifications/notifications_data.dart';
 import 'sync/sync_service.dart';
 
 class ScorePage extends ConsumerStatefulWidget {
@@ -26,31 +26,88 @@ class ScorePage extends ConsumerStatefulWidget {
 class _ScorePageState extends ConsumerState<ScorePage> {
   Map<String, dynamic>? score;
   bool loading = true;
+  String? error;
+  bool fromCache = false;
+  bool offlineNoCache = false;
 
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   Future<void> _load() async {
-    try {
-      final s = await ref
-          .read(apiClientProvider)
-          .get<Map<String, dynamic>>(
-            '/score',
-            parse: (d) => Map<String, dynamic>.from(d as Map),
-          );
-      setState(() {
-        score = s;
-        loading = false;
-      });
-    } catch (_) {
-      setState(() {
-        score = null;
-        loading = false;
-      });
+    if (!mounted) return;
+    setState(() {
+      loading = true;
+      error = null;
+      fromCache = false;
+      offlineNoCache = false;
+    });
+
+    Map<String, dynamic>? fetched;
+    ApiException? lastApiError;
+
+    for (var attempt = 0; attempt < 3 && fetched == null; attempt++) {
+      if (!mounted) return;
+      if (attempt > 0) {
+        await Future<void>.delayed(Duration(seconds: attempt * 4));
+      }
+      if (!mounted) return;
+      try {
+        fetched = await ref
+            .read(apiClientProvider)
+            .get<Map<String, dynamic>>(
+              '/score',
+              parse: (d) => Map<String, dynamic>.from(d as Map),
+            );
+      } on ApiException catch (e) {
+        lastApiError = e;
+        // 2e essai : recalcul explicite (réveille aussi le service ML)
+        if (attempt == 1) {
+          try {
+            fetched = await ref
+                .read(apiClientProvider)
+                .post<Map<String, dynamic>>(
+                  '/score/recalculate',
+                  parse: (d) => Map<String, dynamic>.from(d as Map),
+                );
+          } on ApiException catch (e2) {
+            lastApiError = e2;
+          } catch (_) {}
+        }
+      } catch (_) {}
     }
+
+    if (!mounted) return;
+
+    if (fetched != null) {
+      await ref.read(localCacheProvider).putMap(LocalCacheKeys.score, fetched);
+      if (!mounted) return;
+      setState(() {
+        score = fetched;
+        loading = false;
+      });
+      return;
+    }
+
+    final cached = ref.read(localCacheProvider).getMap(LocalCacheKeys.score);
+    if (!mounted) return;
+    final offline = lastApiError?.isOffline == true;
+    setState(() {
+      score = cached;
+      fromCache = cached != null;
+      offlineNoCache = offline && cached == null;
+      error = offline
+          ? (cached == null
+              ? ref.read(nfStringsProvider)('scoreOfflineNoCache')
+              : 'Connexion lente ou hors ligne. Affichage du dernier score connu.')
+          : (lastApiError?.message ??
+              'Impossible de charger le score pour le moment.');
+      loading = false;
+    });
   }
 
   @override
@@ -66,7 +123,38 @@ class _ScorePageState extends ConsumerState<ScorePage> {
           title: Text(t('neoscore')),
           actions: const [NfSpeakButton(labelKey: 'neoscore')],
         ),
-        body: const Center(child: Text('Score indisponible pour le moment')),
+        body: RefreshIndicator(
+          onRefresh: _load,
+          color: NfTokens.brand,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(24),
+            children: [
+              const SizedBox(height: 48),
+              Icon(
+                Icons.cloud_off_outlined,
+                size: 48,
+                color: NfTokens.textMute,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                error ?? t('scoreOfflineNoCache'),
+                textAlign: TextAlign.center,
+                style: TextStyle(color: NfTokens.textMute),
+              ),
+              if (!offlineNoCache) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'L’API Render peut mettre 30–40 s à se réveiller au premier appel.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: NfTokens.textMute, fontSize: 13),
+                ),
+              ],
+              const SizedBox(height: 20),
+              NfPrimaryButton(label: 'Réessayer', onPressed: _load),
+            ],
+          ),
+        ),
       );
     }
     final criteria = Map<String, dynamic>.from(
@@ -75,6 +163,9 @@ class _ScorePageState extends ConsumerState<ScorePage> {
     final history = (score!['history'] as List?) ?? [];
     final eligible = score!['eligible'] == true;
     final statusKey = eligible ? 'eligible' : 'notEligible';
+    final dataQuality = score!['dataQuality'] as Map?;
+    final warnings = (dataQuality?['warnings'] as List?) ?? [];
+    final repayment = score!['repaymentCapacity'] as Map?;
 
     return Scaffold(
       appBar: AppBar(
@@ -86,10 +177,28 @@ class _ScorePageState extends ConsumerState<ScorePage> {
           ),
         ],
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(20),
-        children: [
-          Center(
+      body: RefreshIndicator(
+        onRefresh: _load,
+        color: NfTokens.brand,
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            if (fromCache) ...[
+              Container(
+                padding: const EdgeInsets.all(12),
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: NfTokens.elevated,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: NfTokens.brand.withValues(alpha: 0.35)),
+                ),
+                child: Text(
+                  error ?? 'Score affiché depuis le cache local.',
+                  style: TextStyle(color: NfTokens.textMute, fontSize: 13),
+                ),
+              ),
+            ],
+            Center(
             child: Text(
               '${score!['score']}',
               style: Theme.of(context).textTheme.displayLarge?.copyWith(
@@ -104,6 +213,28 @@ class _ScorePageState extends ConsumerState<ScorePage> {
               style: TextStyle(color: NfTokens.textMute),
             ),
           ),
+          if (repayment != null) ...[
+            const SizedBox(height: 8),
+            Center(
+              child: Text(
+                'Capacité remboursement : ~${asFcfaInt(repayment['maxMonthlyPaymentFcfa'])} FCFA/mois',
+                style: TextStyle(color: NfTokens.textMute, fontSize: 13),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+          if (warnings.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...warnings.map(
+              (w) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  '• $w',
+                  style: TextStyle(color: NfTokens.warn, fontSize: 13),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 20),
           ...[
             ('Régularité', criteria['regularite']),
@@ -111,7 +242,7 @@ class _ScorePageState extends ConsumerState<ScorePage> {
             ('Gestion des créances', criteria['dettes']),
             ('Croissance', criteria['croissance']),
           ].map((e) {
-            final pct = (e.$2 as num?)?.toDouble() ?? 0;
+            final pct = asNumDouble(e.$2);
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Column(
@@ -159,10 +290,13 @@ class _ScorePageState extends ConsumerState<ScorePage> {
             )
           else
             Text(
-              'Continuez d’enregistrer des ventes pour dépasser 50.',
+              warnings.isNotEmpty
+                  ? warnings.first.toString()
+                  : 'Continuez d’enregistrer des ventes pour dépasser 50.',
               style: TextStyle(color: NfTokens.textMute),
             ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -177,6 +311,7 @@ class CreditPage extends ConsumerStatefulWidget {
 
 class _CreditPageState extends ConsumerState<CreditPage> {
   Map<String, dynamic>? offer;
+  List<Map<String, dynamic>> applications = [];
   int amount = 150000;
   String purpose = 'stock';
   String? reference;
@@ -184,13 +319,35 @@ class _CreditPageState extends ConsumerState<CreditPage> {
   bool needConsent = false;
   bool loading = false;
 
+  static String _statusLabel(String? status) {
+    switch (status) {
+      case 'brouillon':
+        return 'Brouillon';
+      case 'soumise':
+        return 'Soumise';
+      case 'en_examen':
+        return 'En examen';
+      case 'approuvee':
+        return 'Approuvée';
+      case 'refusee':
+        return 'Refusée';
+      case 'decaissee':
+        return 'Décaissée';
+      default:
+        return status ?? '—';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _load();
+    });
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     try {
       final o = await ref
           .read(apiClientProvider)
@@ -198,12 +355,28 @@ class _CreditPageState extends ConsumerState<CreditPage> {
             '/credit/offer',
             parse: (d) => Map<String, dynamic>.from(d as Map),
           );
+      if (!mounted) return;
       setState(() {
         offer = o;
-        amount = o['suggestedFcfa'] as int? ?? amount;
+        amount = asFcfaInt(o['suggestedFcfa'], fallback: amount);
       });
     } catch (_) {
-      setState(() => offer = null);
+      if (mounted) setState(() => offer = null);
+    }
+    if (!mounted) return;
+    try {
+      final list = await ref.read(apiClientProvider).get<List>(
+            '/credit/applications',
+            parse: (d) => d as List,
+          );
+      if (!mounted) return;
+      setState(() {
+        applications = list
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList();
+      });
+    } catch (_) {
+      // keep previous list
     }
   }
 
@@ -212,13 +385,14 @@ class _CreditPageState extends ConsumerState<CreditPage> {
       await ref
           .read(apiClientProvider)
           .put('/me/consents', data: {'consentCreditPartners': true});
-      setState(() => needConsent = false);
+      if (mounted) setState(() => needConsent = false);
     } on ApiException catch (e) {
-      setState(() => error = e.message);
+      if (mounted) setState(() => error = e.message);
     }
   }
 
   Future<void> _submit() async {
+    if (!mounted) return;
     setState(() {
       loading = true;
       error = null;
@@ -237,8 +411,13 @@ class _CreditPageState extends ConsumerState<CreditPage> {
             data: payload,
             parse: (d) => Map<String, dynamic>.from(d as Map),
           );
-      setState(() => reference = app['reference'] as String?);
+      if (!mounted) return;
+      setState(() {
+        reference = app['reference'] as String?;
+        applications = [app, ...applications];
+      });
     } on ApiException catch (e) {
+      if (!mounted) return;
       if (e.isOffline || e.isServerError) {
         final mutationId = OfflineQueue.newId();
         final createdAt = DateTime.now().toUtc().toIso8601String();
@@ -251,6 +430,7 @@ class _CreditPageState extends ConsumerState<CreditPage> {
               ),
             );
         await ref.read(syncServiceProvider).refreshCount();
+        if (!mounted) return;
         setState(() => reference = 'HORS-LIGNE');
       } else {
         final code = (e.body is Map) ? (e.body as Map)['error'] : null;
@@ -260,7 +440,7 @@ class _CreditPageState extends ConsumerState<CreditPage> {
         });
       }
     } finally {
-      setState(() => loading = false);
+      if (mounted) setState(() => loading = false);
     }
   }
 
@@ -287,13 +467,17 @@ class _CreditPageState extends ConsumerState<CreditPage> {
               Text(
                 reference == 'HORS-LIGNE'
                     ? 'Synchronisation automatique'
-                    : 'Statut · En cours · 24–48 h',
+                    : 'Statut · ${_statusLabel(applications.isNotEmpty ? applications.first['status']?.toString() : 'soumise')}',
                 style: TextStyle(color: NfTokens.textMute),
               ),
               const Spacer(),
               NfPrimaryButton(
                 label: 'Accueil',
                 onPressed: () => context.go('/app'),
+              ),
+              TextButton(
+                onPressed: () => setState(() => reference = null),
+                child: const Text('Voir mes demandes'),
               ),
             ],
           ),
@@ -311,7 +495,7 @@ class _CreditPageState extends ConsumerState<CreditPage> {
         actions: [
           NfSpeakButton(
             text: eligible
-                ? '${t('credit')}. ${fmt.format(offer?['suggestedFcfa'] ?? 0)} FCFA. ${t('submitCredit')}.'
+                ? '${t('credit')}. ${fmt.format(asFcfaInt(offer?['suggestedFcfa']))} FCFA. ${t('submitCredit')}.'
                 : '${t('credit')}. ${t('notEligible')}.',
             alwaysShow: true,
           ),
@@ -320,6 +504,38 @@ class _CreditPageState extends ConsumerState<CreditPage> {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          if (applications.isNotEmpty) ...[
+            Text(
+              'Mes demandes',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            ...applications.take(5).map((app) {
+              final status = app['status']?.toString();
+              return Card(
+                child: ListTile(
+                  title: Text(app['reference']?.toString() ?? 'Demande'),
+                  subtitle: Text(
+                    '${fmt.format(asFcfaInt(app['amountFcfa']))} FCFA · ${_statusLabel(status)}',
+                    style: TextStyle(color: NfTokens.textMute, fontSize: 13),
+                  ),
+                  trailing: Text(
+                    _statusLabel(status),
+                    style: TextStyle(
+                      color: status == 'approuvee' || status == 'decaissee'
+                          ? NfTokens.ok
+                          : status == 'refusee'
+                              ? NfTokens.danger
+                              : NfTokens.brandSoft,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
           if (offer != null && !eligible)
             Text(
               'Non éligible (score ${offer?['score'] ?? '—'})',
@@ -337,11 +553,11 @@ class _CreditPageState extends ConsumerState<CreditPage> {
                       style: TextStyle(color: NfTokens.textMute),
                     ),
                     Text(
-                      '${fmt.format(offer!['suggestedFcfa'])} FCFA',
+                      '${fmt.format(asFcfaInt(offer!['suggestedFcfa']))} FCFA',
                       style: Theme.of(context).textTheme.headlineSmall,
                     ),
                     Text(
-                      '${fmt.format(offer!['minFcfa'])} – ${fmt.format(offer!['maxFcfa'])} · ${offer!['durationMonths']} mois',
+                      '${fmt.format(asFcfaInt(offer!['minFcfa']))} – ${fmt.format(asFcfaInt(offer!['maxFcfa']))} · ${asFcfaInt(offer!['durationMonths'])} mois',
                       style: TextStyle(color: NfTokens.textMute),
                     ),
                   ],
@@ -413,11 +629,14 @@ class ProfilePage extends ConsumerStatefulWidget {
 
 class _ProfilePageState extends ConsumerState<ProfilePage> {
   late TextEditingController nameCtrl;
+  late TextEditingController idNumberCtrl;
+  late TextEditingController addressCtrl;
+  late TextEditingController birthDateCtrl;
+  String idType = 'cni';
+  String kycStatut = 'non_verifie';
   bool shareImf = false;
-  String language = 'fr';
-  String theme = 'dark';
-  bool iconMode = false;
-  bool voiceAssist = false;
+  bool consentAnonymized = true;
+  bool consentMarketing = false;
   bool saving = false;
   String? message;
   String? error;
@@ -427,15 +646,45 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     super.initState();
     final user = ref.read(authProvider).user;
     nameCtrl = TextEditingController(text: user?.displayName ?? '');
-    language = NfStrings.normalize(
-      user?.language ?? ref.read(uxPrefsProvider).language,
-    );
-    theme = user?.theme == 'light'
-        ? 'light'
-        : ref.read(uxPrefsProvider).theme;
-    iconMode = ref.read(uxPrefsProvider).iconMode;
-    voiceAssist = ref.read(uxPrefsProvider).voiceAssist;
-    _loadConsents();
+    idNumberCtrl = TextEditingController();
+    addressCtrl = TextEditingController();
+    birthDateCtrl = TextEditingController();
+    // Chargements API / cache hors initState+build (évite écran rouge Riverpod).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _loadConsents();
+      _loadKyc();
+    });
+  }
+
+  Future<void> _loadKyc() async {
+    void apply(Map<String, dynamic> me) {
+      final rawBirth = me['dateNaissance']?.toString();
+      String birth = '';
+      if (rawBirth != null && rawBirth.length >= 10) {
+        birth = rawBirth.substring(0, 10);
+      }
+      setState(() {
+        kycStatut = me['kycStatut']?.toString() ?? 'non_verifie';
+        idType = me['pieceIdentiteType']?.toString() ?? 'cni';
+        idNumberCtrl.text = me['pieceIdentiteNumero']?.toString() ?? '';
+        addressCtrl.text = me['adresse']?.toString() ?? '';
+        birthDateCtrl.text = birth;
+      });
+    }
+
+    try {
+      final me = await ref.read(apiClientProvider).get<Map<String, dynamic>>(
+            '/me',
+            parse: (d) => Map<String, dynamic>.from(d as Map),
+          );
+      if (!mounted) return;
+      await ref.read(localCacheProvider).putMap(LocalCacheKeys.profile, me);
+      apply(me);
+    } catch (_) {
+      final cached = ref.read(localCacheProvider).getMap(LocalCacheKeys.profile);
+      if (cached != null && mounted) apply(cached);
+    }
   }
 
   Future<void> _loadConsents() async {
@@ -447,16 +696,32 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             parse: (d) => Map<String, dynamic>.from(d as Map),
           );
       final items = (res['items'] as List?) ?? [];
-      final imf = items.cast<Map>().where((i) => i['type'] == 'partage_imf');
-      if (imf.isNotEmpty) {
-        setState(() => shareImf = imf.first['accorde'] == true);
+      bool? imf;
+      bool? anon;
+      bool? marketing;
+      for (final raw in items) {
+        final i = Map<String, dynamic>.from(raw as Map);
+        final type = i['type']?.toString();
+        final accorde = i['accorde'] == true;
+        if (type == 'partage_imf') imf = accorde;
+        if (type == 'anonymisation_recherche') anon = accorde;
+        if (type == 'marketing_partenaires') marketing = accorde;
       }
+      if (!mounted) return;
+      setState(() {
+        if (imf != null) shareImf = imf;
+        if (anon != null) consentAnonymized = anon;
+        if (marketing != null) consentMarketing = marketing;
+      });
     } catch (_) {}
   }
 
   @override
   void dispose() {
     nameCtrl.dispose();
+    idNumberCtrl.dispose();
+    addressCtrl.dispose();
+    birthDateCtrl.dispose();
     super.dispose();
   }
 
@@ -467,8 +732,21 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       message = null;
     });
     final displayName = nameCtrl.text.trim();
-    final profilePayload = {'displayName': displayName};
-    final consentsPayload = {'consentCreditPartners': shareImf};
+    final idNumber = idNumberCtrl.text.trim();
+    final address = addressCtrl.text.trim();
+    final birth = birthDateCtrl.text.trim();
+    final profilePayload = <String, dynamic>{
+      'displayName': displayName,
+      if (idNumber.isNotEmpty) 'pieceIdentiteType': idType,
+      if (idNumber.isNotEmpty) 'pieceIdentiteNumero': idNumber,
+      if (address.isNotEmpty) 'adresse': address,
+      if (birth.length >= 10) 'dateNaissance': birth.substring(0, 10),
+    };
+    final consentsPayload = {
+      'consentCreditPartners': shareImf,
+      'consentAnonymized': consentAnonymized,
+      'consentMarketing': consentMarketing,
+    };
     try {
       final me = await ref
           .read(apiClientProvider)
@@ -489,15 +767,13 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
       await ref
           .read(apiClientProvider)
           .put('/me/consents', data: consentsPayload);
-      await ref
-          .read(uxPrefsProvider.notifier)
-          .persist(
-            language: language,
-            iconMode: iconMode,
-            voiceAssist: voiceAssist,
-            theme: theme,
-          );
-      setState(() => message = 'Profil enregistré');
+      setState(() {
+        message = 'Profil enregistré';
+        if (me['kycStatut'] != null) {
+          kycStatut = me['kycStatut'].toString();
+        }
+      });
+      await ref.read(localCacheProvider).putMap(LocalCacheKeys.profile, me);
     } on ApiException catch (e) {
       if (e.isOffline || e.isServerError) {
         final createdAt = DateTime.now().toUtc().toIso8601String();
@@ -518,6 +794,20 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             createdAt: createdAt,
           ),
         );
+        // Brouillon KYC / profil lisible hors ligne jusqu'à la sync.
+        final existing =
+            ref.read(localCacheProvider).getMap(LocalCacheKeys.profile) ??
+                <String, dynamic>{};
+        await ref.read(localCacheProvider).putMap(LocalCacheKeys.profile, {
+          ...existing,
+          'displayName': displayName,
+          if (idNumber.isNotEmpty) 'pieceIdentiteType': idType,
+          if (idNumber.isNotEmpty) 'pieceIdentiteNumero': idNumber,
+          if (address.isNotEmpty) 'adresse': address,
+          if (birth.length >= 10) 'dateNaissance': birth.substring(0, 10),
+          'kycStatut': kycStatut == 'non_verifie' ? 'en_cours' : kycStatut,
+          'pendingSync': true,
+        });
         await ref.read(syncServiceProvider).refreshCount();
         final user = ref.read(authProvider).user;
         if (user != null) {
@@ -525,12 +815,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
               .read(authProvider.notifier)
               .setUser(user.copyWith(displayName: displayName));
         }
-        await ref.read(uxPrefsProvider.notifier).persist(
-              language: language,
-              iconMode: iconMode,
-              voiceAssist: voiceAssist,
-              theme: theme,
-            );
         setState(() => message = 'Enregistré hors ligne — sync au retour réseau');
       } else {
         setState(() => error = e.message);
@@ -556,10 +840,10 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
         '${NfTokens.appName} — ${t('passport')}',
         'Nom : ${profile['displayName'] ?? ''}',
         'Tél : ${profile['phone'] ?? ''}',
-        'NeoScore : ${score['valeur'] ?? '—'} (${score['segment'] ?? ''})',
-        'Ventes 30j : ${sales['totalFcfa'] ?? 0} FCFA',
-        'Créances : ${debts['totalFcfa'] ?? 0} FCFA',
-        'Stock : ${stock['articleCount'] ?? 0} articles',
+        'NeoScore : ${score['valeur'] ?? score['score'] ?? '—'} (${score['segment'] ?? ''})',
+        'Ventes 30j : ${asFcfaInt(sales['totalFcfa'])} FCFA',
+        'Créances : ${asFcfaInt(debts['totalFcfa'])} FCFA',
+        'Stock : ${asFcfaInt(stock['articleCount'])} articles',
       ].join('\n');
       await SharePlus.instance.share(
         ShareParams(text: text, subject: t('passport')),
@@ -662,16 +946,35 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
     }
   }
 
+  String _kycLabel(NfStrings t, String statut) {
+    switch (statut) {
+      case 'en_cours':
+        return t('kycPending');
+      case 'verifie':
+        return t('kycVerified');
+      case 'refuse':
+        return t('kycRejected');
+      default:
+        return t('kycUnverified');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authProvider).user;
-    final pending = ref.watch(syncPendingProvider);
     final t = ref.watch(nfStringsProvider);
-    final lock = ref.watch(appLockProvider);
-    final unread = ref.watch(unreadNotificationsCountProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(t('profile'))),
+      appBar: AppBar(
+        title: Text(t('profile')),
+        actions: [
+          IconButton(
+            tooltip: t('settings'),
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: () => context.push('/app/parametres'),
+          ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -693,79 +996,101 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             textAlign: TextAlign.center,
             style: TextStyle(color: NfTokens.textMute),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.settings_outlined, color: NfTokens.brand),
+            title: Text(t('settings')),
+            subtitle: Text(t('aboutHelpHint')),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.push('/app/parametres'),
+          ),
+          const Divider(height: 28),
           TextField(
             controller: nameCtrl,
             decoration: InputDecoration(labelText: t('displayName')),
           ),
-          const SizedBox(height: 12),
-          Text(t('language'), style: TextStyle(color: NfTokens.textMute)),
-          const SizedBox(height: 8),
-          NfSegmented(
-            value: language,
-            onChanged: (v) => setState(() => language = v),
-            options: [for (final e in NfStrings.selectableLanguages) e],
+          const SizedBox(height: 16),
+          Text(
+            t('kycSection'),
+            style: TextStyle(
+              color: NfTokens.text,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
           ),
-          const SizedBox(height: 12),
-          Text(t('theme'), style: TextStyle(color: NfTokens.textMute)),
+          const SizedBox(height: 4),
+          Text(
+            t('kycHint'),
+            style: TextStyle(color: NfTokens.textMute, fontSize: 13),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${t('kycStatus')} : ${_kycLabel(t, kycStatut)}',
+            style: TextStyle(color: NfTokens.brand, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 8),
+          Text(t('idType'), style: TextStyle(color: NfTokens.textMute)),
           const SizedBox(height: 8),
           NfSegmented(
-            value: theme,
-            onChanged: (v) {
-              setState(() => theme = v);
-              ref.read(uxPrefsProvider.notifier).setThemeLocal(v);
-            },
+            value: idType,
+            onChanged: (v) => setState(() => idType = v),
             options: [
-              ('light', t('themeLight')),
-              ('dark', t('themeDark')),
+              ('cni', t('idCni')),
+              ('passport', t('idPassport')),
+              ('consulaire', t('idConsular')),
+              ('autre', t('idOther')),
             ],
           ),
           const SizedBox(height: 12),
-          Text(t('iconMode'), style: TextStyle(color: NfTokens.textMute)),
-          const SizedBox(height: 4),
-          Text(
-            t('iconModeHint'),
-            style: TextStyle(color: NfTokens.textMute, fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          NfSegmented(
-            value: iconMode ? 'oui' : 'non',
-            onChanged: (v) => setState(() => iconMode = v == 'oui'),
-            options: const [('oui', 'Oui'), ('non', 'Non')],
+          TextField(
+            controller: idNumberCtrl,
+            decoration: InputDecoration(labelText: t('idNumber')),
+            textCapitalization: TextCapitalization.characters,
           ),
           const SizedBox(height: 12),
+          TextField(
+            controller: birthDateCtrl,
+            decoration: InputDecoration(
+              labelText: t('birthDate'),
+              hintText: 'AAAA-MM-JJ',
+            ),
+            keyboardType: TextInputType.datetime,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: addressCtrl,
+            decoration: InputDecoration(labelText: t('address')),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 16),
           Text(
-            t('voiceAssist'),
+            t('shareImf'),
             style: TextStyle(color: NfTokens.textMute),
           ),
-          const SizedBox(height: 4),
-          Text(
-            t('voiceAssistHint'),
-            style: TextStyle(color: NfTokens.textMute, fontSize: 13),
-          ),
-          const SizedBox(height: 8),
-          NfSegmented(
-            value: voiceAssist ? 'oui' : 'non',
-            onChanged: (v) => setState(() => voiceAssist = v == 'oui'),
-            options: const [('oui', 'Oui'), ('non', 'Non')],
-          ),
-          if (voiceAssist) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  t('listen'),
-                  style: TextStyle(color: NfTokens.textMute),
-                ),
-                NfSpeakButton(labelKey: 'voiceAssist', alwaysShow: true),
-              ],
-            ),
-          ],
-          const SizedBox(height: 12),
-          Text(t('shareImf'), style: TextStyle(color: NfTokens.textMute)),
           NfSegmented(
             value: shareImf ? 'ok' : 'no',
             onChanged: (v) => setState(() => shareImf = v == 'ok'),
+            options: [('ok', t('allow')), ('no', t('deny'))],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            t('consentAnonymized'),
+            style: TextStyle(color: NfTokens.textMute),
+          ),
+          NfSegmented(
+            value: consentAnonymized ? 'ok' : 'no',
+            onChanged: (v) => setState(() => consentAnonymized = v == 'ok'),
+            options: [('ok', t('allow')), ('no', t('deny'))],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            t('consentMarketing'),
+            style: TextStyle(color: NfTokens.textMute),
+          ),
+          NfSegmented(
+            value: consentMarketing ? 'ok' : 'no',
+            onChanged: (v) => setState(() => consentMarketing = v == 'ok'),
             options: [('ok', t('allow')), ('no', t('deny'))],
           ),
           if (message != null)
@@ -794,45 +1119,6 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             onTap: () => context.push('/app/tontine'),
           ),
           ListTile(
-            leading: const Icon(Icons.notifications_outlined),
-            title: Text(t('notifications')),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (unread > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: NfTokens.danger,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      '$unread',
-                      style: const TextStyle(fontSize: 11, color: Colors.white),
-                    ),
-                  ),
-                const Icon(Icons.chevron_right),
-              ],
-            ),
-            onTap: () => context.push('/app/notifications'),
-          ),
-          if (lock.biometricAvailable) ...[
-            const SizedBox(height: 12),
-            Text(t('lock'), style: TextStyle(color: NfTokens.textMute)),
-            const SizedBox(height: 8),
-            NfSegmented(
-              value: lock.biometricEnabled ? 'oui' : 'non',
-              onChanged: (v) => ref
-                  .read(appLockProvider.notifier)
-                  .setBiometricEnabled(v == 'oui'),
-              options: const [('oui', 'Oui'), ('non', 'Non')],
-            ),
-            const SizedBox(height: 8),
-          ],
-          ListTile(
             title: Text(t('neoscore')),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/app/score'),
@@ -842,38 +1128,188 @@ class _ProfilePageState extends ConsumerState<ProfilePage> {
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.push('/app/credit'),
           ),
-          ListTile(
-            title: Text(
-              pending > 0
-                  ? '${t('offlineQueue')} · ${t.format('offlinePending', {'n': '$pending'})}'
-                  : '${t('offlineQueue')} · ${t('offlineUpToDate')}',
+          const SizedBox(height: 12),
+          Text(
+            'Données & compte',
+            style: TextStyle(
+              color: NfTokens.text,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
             ),
-          ),
-          ListTile(
-            leading: const Icon(Icons.download_outlined),
-            title: const Text('Exporter mes données'),
-            subtitle: const Text('Droit d’accès RGPD'),
-            onTap: _exportData,
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_forever_outlined, color: NfTokens.danger),
-            title: const Text(
-              'Supprimer mon compte',
-              style: TextStyle(color: NfTokens.danger),
-            ),
-            subtitle: const Text('Droit à l’oubli — irréversible'),
-            onTap: _deleteAccount,
           ),
           const SizedBox(height: 12),
-          OutlinedButton(
-            onPressed: () async {
+          _PrivacyActionsCard(
+            onExport: _exportData,
+            onDelete: _deleteAccount,
+            onLogout: () async {
               await ref.read(authProvider.notifier).logout();
               if (context.mounted) context.go('/login');
             },
-            style: OutlinedButton.styleFrom(foregroundColor: NfTokens.danger),
-            child: Text(t('logout')),
+            logoutLabel: t('logout'),
           ),
+          const SizedBox(height: 8),
         ],
+      ),
+    );
+  }
+}
+
+class _PrivacyActionsCard extends StatelessWidget {
+  const _PrivacyActionsCard({
+    required this.onExport,
+    required this.onDelete,
+    required this.onLogout,
+    required this.logoutLabel,
+  });
+
+  final VoidCallback onExport;
+  final VoidCallback onDelete;
+  final VoidCallback onLogout;
+  final String logoutLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: NfTokens.elevated,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: NfTokens.line),
+            boxShadow: NfTokens.isDark
+                ? null
+                : [
+                    BoxShadow(
+                      color: NfTokens.text.withValues(alpha: 0.04),
+                      blurRadius: 18,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              _PrivacyActionTile(
+                icon: Icons.download_outlined,
+                iconColor: NfTokens.brand,
+                iconBg: NfTokens.brand.withValues(alpha: 0.12),
+                title: 'Exporter mes données',
+                subtitle: 'Droit d’accès RGPD',
+                onTap: onExport,
+              ),
+              Divider(height: 1, thickness: 1, color: NfTokens.line),
+              _PrivacyActionTile(
+                icon: Icons.delete_outline_rounded,
+                iconColor: NfTokens.danger,
+                iconBg: NfTokens.danger.withValues(alpha: 0.12),
+                title: 'Supprimer mon compte',
+                titleColor: NfTokens.danger,
+                subtitle: 'Droit à l’oubli — irréversible',
+                onTap: onDelete,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        SizedBox(
+          height: 52,
+          child: OutlinedButton(
+            onPressed: onLogout,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: NfTokens.danger,
+              backgroundColor: NfTokens.elevated,
+              side: BorderSide(
+                color: NfTokens.danger.withValues(alpha: 0.45),
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(999),
+              ),
+              textStyle: const TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                letterSpacing: 0.2,
+              ),
+            ),
+            child: Text(logoutLabel),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PrivacyActionTile extends StatelessWidget {
+  const _PrivacyActionTile({
+    required this.icon,
+    required this.iconColor,
+    required this.iconBg,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+    this.titleColor,
+  });
+
+  final IconData icon;
+  final Color iconColor;
+  final Color iconBg;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+  final Color? titleColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: iconBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: iconColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: titleColor ?? NfTokens.text,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                        height: 1.2,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        color: NfTokens.textMute,
+                        fontSize: 13,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: NfTokens.textMute.withValues(alpha: 0.7),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

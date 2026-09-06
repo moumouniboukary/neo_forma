@@ -24,9 +24,15 @@
     "db:status": "npm run db:status --workspace=@neoforma/api",
     "db:push": "npm run db:push --workspace=@neoforma/api",
     "mobile:run": "cd apps/mobile && flutter run --dart-define=API_BASE=http://10.0.2.2:3001",
+    "mobile:collab": "cd apps/mobile && flutter run --dart-define=API_BASE=https://neoforma-api.onrender.com",
+    "mobile:apk": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-collab-apk.ps1",
+    "teriyascore:collab": "cd teriyascore/apps/mobile && flutter run",
+    "teriyascore:apk": "powershell -NoProfile -ExecutionPolicy Bypass -File teriyascore/scripts/build-collab-apk.ps1",
     "mobile:analyze": "cd apps/mobile && flutter analyze",
     "mobile:e2e": "cd apps/mobile && maestro test e2e/",
-    "prod:up": "docker compose -f docker-compose.prod.yml up -d --build"
+    "prod:up": "docker compose -f docker-compose.prod.yml up -d --build",
+    "ml:up": "docker compose up -d --build neoscore-ml",
+    "ml:health": "curl -sf http://127.0.0.1:8000/health"
   },
   "engines": {
     "node": ">=20"

@@ -1,17 +1,23 @@
+import 'dart:async';
+
 import 'package:audioplayers/audioplayers.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:intl/intl.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 
+import '../brand.dart';
 import '../l10n/locale_provider.dart';
 import '../l10n/strings.dart';
+import 'spoken_amount.dart';
 
 /// Assistance vocale :
 /// 1) audio `assets/audio/{lang}/{key}.mp3|.wav` si présent
-/// 2) sinon TTS système
-/// 3) STT : [listenOnce] pour dicter un montant / texte
+/// 2) sinon TTS système (français — montants / textes dynamiques)
+/// 3) STT robuste : pause après lecture, retries, cloud / appareil.
 class VoiceService {
   VoiceService(this._ref) {
     _tts.setSpeechRate(0.42);
@@ -23,69 +29,261 @@ class VoiceService {
   final FlutterTts _tts = FlutterTts();
   final AudioPlayer _player = AudioPlayer();
   final SpeechToText _stt = SpeechToText();
+  final Connectivity _connectivity = Connectivity();
   bool _busy = false;
   bool _sttReady = false;
+  bool _listenLocked = false;
 
   bool get enabled => _ref.read(uxPrefsProvider).voiceAssist;
   String get lang => _ref.read(uxPrefsProvider).language;
   NfStrings get strings => _ref.read(nfStringsProvider);
 
   Future<void> stop() async {
-    await _player.stop();
-    await _tts.stop();
-    if (_stt.isListening) await _stt.stop();
+    try {
+      await _player.stop();
+    } catch (_) {}
+    try {
+      await _tts.stop();
+    } catch (_) {}
+    try {
+      if (_stt.isListening) await _stt.stop();
+    } catch (_) {}
     _busy = false;
   }
 
-  /// Écoute ~5 s et renvoie le texte reconnu (FR). null si indisponible.
-  Future<String?> listenOnce({
-    Duration timeout = const Duration(seconds: 5),
+  Future<bool> _isOnline() async {
+    try {
+      final results = await _connectivity.checkConnectivity();
+      return results.any((r) => r != ConnectivityResult.none);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _awaitPlayerIdle({
+    Duration fallback = const Duration(milliseconds: 1800),
   }) async {
     try {
-      if (!_sttReady) {
-        _sttReady = await _stt.initialize(
-          onError: (e) => debugPrint('STT error: $e'),
-        );
-      }
-      if (!_sttReady) return null;
+      await _player.onPlayerComplete.first.timeout(fallback);
+    } catch (_) {
+      await Future<void>.delayed(fallback);
+    }
+  }
 
-      await stop();
-      String? result;
+  Future<bool> _ensureStt() async {
+    if (_sttReady) return true;
+    try {
+      _sttReady = await _stt.initialize(
+        onError: (e) => debugPrint('STT error: $e'),
+        onStatus: (s) => debugPrint('STT status: $s'),
+      );
+    } catch (e) {
+      debugPrint('STT initialize failed: $e');
+      _sttReady = false;
+    }
+    return _sttReady;
+  }
+
+  /// Coupe haut-parleur + micro, puis silence pour éviter l’écho.
+  Future<void> _prepareMic() async {
+    try {
+      await _player.stop();
+    } catch (_) {}
+    try {
+      await _tts.stop();
+    } catch (_) {}
+    try {
+      if (_stt.isListening) await _stt.cancel();
+    } catch (_) {
+      try {
+        if (_stt.isListening) await _stt.stop();
+      } catch (_) {}
+    }
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+  }
+
+  Future<String> _resolveSttLocale() async {
+    List<LocaleName> locales;
+    try {
+      locales = await _stt.locales();
+    } catch (_) {
+      return 'fr_FR';
+    }
+    if (locales.isEmpty) return 'fr_FR';
+
+    String norm(String id) => id.replaceAll('-', '_').toLowerCase();
+    String? firstWherePrefix(List<String> prefixes) {
+      for (final prefix in prefixes) {
+        for (final loc in locales) {
+          if (norm(loc.localeId).startsWith(prefix)) return loc.localeId;
+        }
+      }
+      return null;
+    }
+
+    if (lang == 'mr') {
+      return firstWherePrefix(const ['mos', 'fr']) ?? locales.first.localeId;
+    }
+    return firstWherePrefix(const ['fr']) ?? 'fr_FR';
+  }
+
+  Future<List<String>> _listenSession({
+    required Duration timeout,
+    required bool onDevice,
+    ListenMode listenMode = ListenMode.confirmation,
+  }) async {
+    if (!await _ensureStt()) return const [];
+
+    await _prepareMic();
+    final localeId = await _resolveSttLocale();
+    final texts = <String>[];
+    final done = Completer<void>();
+    var lastError = '';
+
+    try {
       await _stt.listen(
         onResult: (r) {
-          if (r.finalResult || r.recognizedWords.isNotEmpty) {
-            result = r.recognizedWords;
+          for (final a in r.alternates) {
+            final w = a.recognizedWords.trim();
+            if (w.isNotEmpty && !texts.contains(w)) texts.add(w);
+          }
+          if (r.finalResult && !done.isCompleted) {
+            done.complete();
           }
         },
         listenOptions: SpeechListenOptions(
-          localeId: 'fr_FR',
+          localeId: localeId,
           listenFor: timeout,
-          pauseFor: const Duration(seconds: 2),
+          pauseFor: Duration(seconds: lang == 'mr' ? 3 : 2),
+          partialResults: true,
+          cancelOnError: false,
+          onDevice: onDevice,
+          listenMode: listenMode,
         ),
       );
-      await Future<void>.delayed(timeout + const Duration(milliseconds: 400));
-      await _stt.stop();
-      return result?.trim();
+      debugPrint('STT listen onDevice=$onDevice locale=$localeId');
+
+      await done.future.timeout(
+        timeout + const Duration(milliseconds: 900),
+        onTimeout: () {},
+      );
     } catch (e) {
-      debugPrint('VoiceService.listenOnce: $e');
-      return null;
+      lastError = '$e';
+      debugPrint('VoiceService.listenSession(onDevice=$onDevice): $e');
+    } finally {
+      try {
+        if (_stt.isListening) await _stt.stop();
+      } catch (_) {}
     }
+
+    if (texts.isEmpty && lastError.isNotEmpty) {
+      // Réinit au prochain essai si le moteur a planté.
+      _sttReady = false;
+    }
+    return texts;
+  }
+
+  /// Écoute avec retries. Cloud si en ligne, sinon appareil (et l’inverse en secours).
+  Future<List<String>> _listenAllTexts({
+    required Duration timeout,
+    int retries = 2,
+    ListenMode listenMode = ListenMode.confirmation,
+  }) async {
+    if (_listenLocked) {
+      // Évite deux micros en parallèle (cause fréquente d’échec).
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      if (_listenLocked) return const [];
+    }
+    _listenLocked = true;
+    try {
+      final online = await _isOnline();
+      final primaryOnDevice = !online;
+      final modes = primaryOnDevice ? [true, false] : [false, true];
+
+      for (var attempt = 0; attempt < retries; attempt++) {
+        // 1er essai : mode préféré seulement (évite d’attendre 2× le timeout).
+        final tryModes = attempt == 0 ? [primaryOnDevice] : modes;
+        for (final onDevice in tryModes) {
+          final texts = await _listenSession(
+            timeout: timeout,
+            onDevice: onDevice,
+            listenMode: listenMode,
+          );
+          if (texts.isNotEmpty) return texts;
+        }
+        if (attempt + 1 < retries) {
+          await Future<void>.delayed(const Duration(milliseconds: 500));
+        }
+      }
+      return const [];
+    } finally {
+      _listenLocked = false;
+    }
+  }
+
+  /// Écoute courte — noms, type, etc.
+  Future<String?> listenOnce({
+    Duration timeout = const Duration(seconds: 7),
+    int retries = 2,
+  }) async {
+    if (!kVoiceInputEnabled) return null;
+    final texts = await _listenAllTexts(
+      timeout: timeout,
+      retries: retries,
+      listenMode: ListenMode.confirmation,
+    );
+    if (texts.isEmpty) return null;
+    return texts.first;
+  }
+
+  /// Dictée d’un montant : parse FR **ou** mooré selon la langue.
+  Future<int?> listenAmountOnce({
+    Duration timeout = const Duration(seconds: 7),
+    int retries = 2,
+  }) async {
+    if (!kVoiceInputEnabled) return null;
+    final wait = lang == 'mr'
+        ? Duration(milliseconds: timeout.inMilliseconds + 1500)
+        : timeout;
+    final texts = await _listenAllTexts(
+      timeout: wait,
+      retries: retries,
+      listenMode: ListenMode.dictation,
+    );
+    if (texts.isEmpty) return null;
+    return parseSpokenAmount(
+      texts.first,
+      lang: lang,
+      alternates: texts.skip(1),
+    );
   }
 
   Future<void> speakKey(
     String key, {
     Map<String, String> vars = const {},
   }) async {
+    if (key == 'confirmAmount' && vars.containsKey('n')) {
+      await speakKey('confirmAmountPrompt');
+      await speakAmountFcfa(vars['n']!);
+      return;
+    }
     final text = vars.isEmpty ? strings.get(key) : strings.format(key, vars);
     await speakText(text, assetKey: key);
   }
 
-  /// Ordre de repli des dossiers audio pour une langue donnée : la langue
-  /// elle-même, puis mooré (langue la mieux couverte en audio), puis fr.
+  Future<void> speakAmountFcfa(String formattedOrRaw) async {
+    final raw = formattedOrRaw.replaceAll(RegExp(r'[^\d]'), '');
+    final n = int.tryParse(raw);
+    final spoken = n != null
+        ? '${NumberFormat.decimalPattern('fr').format(n)} francs'
+        : '$formattedOrRaw francs';
+    await speakText(spoken);
+  }
+
   List<String> _assetFallbackChain(String language) {
     if (language == 'fr') return const ['fr'];
     if (language == 'mr') return const ['mr', 'fr'];
-    return [language, 'mr', 'fr'];
+    return const ['fr'];
   }
 
   Future<void> speakText(String text, {String? assetKey}) async {
@@ -96,20 +294,16 @@ class VoiceService {
     try {
       if (assetKey != null) {
         for (final candidate in _assetFallbackChain(lang)) {
-          if (await _playAsset(candidate, assetKey)) return;
+          if (await _playAsset(candidate, assetKey)) {
+            await _awaitPlayerIdle();
+            // Laisse le haut-parleur se taire avant un éventuel micro.
+            await Future<void>.delayed(const Duration(milliseconds: 300));
+            return;
+          }
         }
       }
-      // Aucun audio disponible : on ne force jamais une TTS française sur un
-      // texte en mooré/dioula/fulfuldé (résultat incompréhensible). On ne
-      // parle en TTS que si le texte est déjà en français.
-      if (lang == 'fr') {
-        await _speakTts(trimmed);
-      } else if (assetKey != null) {
-        final fallbackText = NfStrings('fr').get(assetKey);
-        if (fallbackText.trim().isNotEmpty) {
-          await _speakTts(fallbackText);
-        }
-      }
+      await _speakTts(trimmed);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
     } catch (e) {
       debugPrint('VoiceService: $e');
     } finally {
@@ -137,6 +331,8 @@ class VoiceService {
     await _player.stop();
     await _tts.setLanguage('fr-FR');
     await _tts.speak(text);
+    final ms = (text.length * 55).clamp(700, 4500);
+    await Future<void>.delayed(Duration(milliseconds: ms));
   }
 
   void dispose() {
@@ -144,8 +340,11 @@ class VoiceService {
   }
 }
 
-final voiceServiceProvider = Provider<VoiceService>((ref) {
-  final service = VoiceService(ref);
-  ref.onDispose(service.dispose);
-  return service;
-});
+final voiceServiceProvider = Provider<VoiceService>(
+  (ref) {
+    final service = VoiceService(ref);
+    ref.onDispose(service.dispose);
+    return service;
+  },
+  dependencies: [uxPrefsProvider, nfStringsProvider],
+);

@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/client.dart';
 import '../../core/offline/local_cache.dart';
+import '../../core/utils/parse.dart';
 
 class TontineCotisation {
   const TontineCotisation({
@@ -17,7 +18,7 @@ class TontineCotisation {
   factory TontineCotisation.fromMap(Map<String, dynamic> m) =>
       TontineCotisation(
         id: m['id']?.toString() ?? '',
-        montantFcfa: (m['montantFcfa'] as num?)?.toInt() ?? 0,
+        montantFcfa: asFcfaInt(m['montantFcfa']),
         datePaiement: m['datePaiement']?.toString() ?? '',
       );
 
@@ -50,9 +51,9 @@ class TontineInfo {
   factory TontineInfo.fromMap(Map<String, dynamic> m) => TontineInfo(
     id: m['id']?.toString() ?? '',
     nom: m['nom']?.toString() ?? 'Tontine',
-    cotisationFcfa: (m['cotisationFcfa'] as num?)?.toInt() ?? 0,
+    cotisationFcfa: asFcfaInt(m['cotisationFcfa']),
     frequence: m['frequence']?.toString() ?? 'mensuel',
-    membres: (m['membres'] as num?)?.toInt() ?? 1,
+    membres: asFcfaInt(m['membres'], fallback: 1),
     actif: m['actif'] != false,
     cotisations: ((m['cotisations'] as List?) ?? [])
         .map((e) => TontineCotisation.fromMap(Map<String, dynamic>.from(e as Map)))
@@ -72,29 +73,33 @@ class TontineInfo {
 
 final tontineRevisionProvider = StateProvider<int>((ref) => 0);
 
-final tontinesProvider = FutureProvider.autoDispose<List<TontineInfo>>((
-  ref,
-) async {
-  ref.watch(tontineRevisionProvider);
-  final api = ref.watch(apiClientProvider);
-  final cache = ref.watch(localCacheProvider);
-  try {
-    final res = await api.get<Map<String, dynamic>>(
-      '/tontine',
-      parse: (d) => Map<String, dynamic>.from(d as Map),
-    );
-    final items = ((res['items'] as List?) ?? [])
-        .map((e) => TontineInfo.fromMap(Map<String, dynamic>.from(e as Map)))
-        .toList();
-    await cache.putList(
-      LocalCacheKeys.tontines,
-      items.map((e) => e.toMap()).toList(),
-    );
-    return items;
-  } catch (_) {
-    return cache.getList(LocalCacheKeys.tontines).map(TontineInfo.fromMap).toList();
-  }
-});
+final tontinesProvider = FutureProvider.autoDispose<List<TontineInfo>>(
+  (ref) async {
+    ref.watch(tontineRevisionProvider);
+    final api = ref.watch(apiClientProvider);
+    final cache = ref.watch(localCacheProvider);
+    try {
+      final res = await api.get<Map<String, dynamic>>(
+        '/tontine',
+        parse: (d) => Map<String, dynamic>.from(d as Map),
+      );
+      final items = ((res['items'] as List?) ?? [])
+          .map((e) => TontineInfo.fromMap(Map<String, dynamic>.from(e as Map)))
+          .toList();
+      await cache.putList(
+        LocalCacheKeys.tontines,
+        items.map((e) => e.toMap()).toList(),
+      );
+      return items;
+    } catch (_) {
+      return cache
+          .getList(LocalCacheKeys.tontines)
+          .map(TontineInfo.fromMap)
+          .toList();
+    }
+  },
+  dependencies: [tontineRevisionProvider, apiClientProvider, localCacheProvider],
+);
 
 class TontineRepository {
   TontineRepository(this._api);
@@ -129,4 +134,5 @@ class TontineRepository {
 
 final tontineRepositoryProvider = Provider<TontineRepository>(
   (ref) => TontineRepository(ref.watch(apiClientProvider)),
+  dependencies: [apiClientProvider],
 );

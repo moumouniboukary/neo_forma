@@ -56,7 +56,10 @@ class _AppShellState extends ConsumerState<AppShell> {
     final loc = GoRouterState.of(context).uri.toString();
     final index = _indexForLocation(loc);
     final t = ref.watch(nfStringsProvider);
-    final iconMode = ref.watch(uxPrefsProvider).iconMode;
+    final ux = ref.watch(uxPrefsProvider);
+    final iconMode = ux.iconMode;
+    // Force rebuild nav/shell quand le thème change (couleurs NfTokens).
+    final _ = ux.theme;
 
     return PopScope(
       canPop: index == 0,
@@ -368,7 +371,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     final pending = ref.watch(syncPendingProvider);
     final syncErr = ref.watch(syncErrorProvider);
     final t = ref.watch(nfStringsProvider);
-    final iconMode = ref.watch(uxPrefsProvider).iconMode;
+    final ux = ref.watch(uxPrefsProvider);
+    final iconMode = ux.iconMode;
+    final _ = ux.theme;
     final fmt = NumberFormat.decimalPattern('fr');
     final needsOnboarding = !(user?.onboardingCompleted ?? false);
     final sales = asFcfaInt(data?['monthSalesFcfa']);

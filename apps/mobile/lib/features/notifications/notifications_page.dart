@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/l10n/locale_provider.dart';
+import '../../core/riverpod_safe.dart';
+import '../../core/offline/local_cache.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/nf_widgets.dart';
 import 'notifications_data.dart';
@@ -42,7 +44,7 @@ class NotificationsPage extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        leading: nfBackButton(context, fallbackLocation: '/app/profil'),
+        leading: nfBackButton(context, fallbackLocation: '/app/parametres'),
         title: Text(t('notifications')),
         actions: [
           TextButton(
@@ -50,7 +52,7 @@ class NotificationsPage extends ConsumerWidget {
               try {
                 await ref.read(notificationsRepositoryProvider).markAllRead();
               } catch (_) {}
-              ref.read(notificationsRevisionProvider.notifier).state++;
+              bumpStateProvider(ref.read(notificationsRevisionProvider.notifier));
             },
             child: Text(t('markAllRead')),
           ),
@@ -58,20 +60,22 @@ class NotificationsPage extends ConsumerWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.read(notificationsRevisionProvider.notifier).state++;
+          bumpStateProvider(ref.read(notificationsRevisionProvider.notifier));
           await ref.read(notificationsProvider.future);
         },
         child: async.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Text(t('offlineQueue'), style: TextStyle(color: NfTokens.textMute)),
-            ],
-          ),
+          error: (_, _) => NfOfflineEmpty(message: t('offlineNoData')),
           data: (items) {
+            final hasCache = ref
+                .read(localCacheProvider)
+                .hasKey(LocalCacheKeys.notifications);
             if (items.isEmpty) {
+              if (!hasCache) {
+                return NfOfflineEmpty(message: t('offlineNoData'));
+              }
               return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(20),
                 children: [
                   const SizedBox(height: 40),
@@ -145,7 +149,7 @@ class NotificationsPage extends ConsumerWidget {
                                   .read(notificationsRepositoryProvider)
                                   .markRead(n.id);
                             } catch (_) {}
-                            ref.read(notificationsRevisionProvider.notifier).state++;
+                            bumpStateProvider(ref.read(notificationsRevisionProvider.notifier));
                           },
                         ),
                     ],

@@ -42,14 +42,18 @@ class QueuedMutation {
     );
   }
 
-  QueuedMutation copyWith({String? status, String? failReason}) {
+  QueuedMutation copyWith({
+    String? status,
+    String? failReason,
+    bool clearFailReason = false,
+  }) {
     return QueuedMutation(
       clientMutationId: clientMutationId,
       kind: kind,
       payload: payload,
       createdAt: createdAt,
       status: status ?? this.status,
-      failReason: failReason ?? this.failReason,
+      failReason: clearFailReason ? null : (failReason ?? this.failReason),
     );
   }
 }
@@ -97,6 +101,27 @@ class OfflineQueue {
       jsonEncode(m.copyWith(status: 'failed', failReason: reason).toJson()),
     );
   }
+
+  /// Remet une mutation rejetée en attente pour un nouvel essai.
+  Future<void> retryFailed(String id) async {
+    final raw = _box.get(id);
+    if (raw == null) return;
+    final m = QueuedMutation.fromJson(jsonDecode(raw) as Map<String, dynamic>);
+    if (m.status != 'failed') return;
+    await _box.put(
+      id,
+      jsonEncode(
+        m.copyWith(status: 'pending', clearFailReason: true).toJson(),
+      ),
+    );
+  }
+
+  Future<void> discard(String id) async {
+    await _box.delete(id);
+  }
+
+  int get failedCount =>
+      list().where((m) => m.status == 'failed').length;
 
   String? get lastPullSince => _meta.get('lastPullSince');
 

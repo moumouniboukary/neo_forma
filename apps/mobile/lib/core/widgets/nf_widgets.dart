@@ -13,6 +13,7 @@ class NfBrandHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final logoUrl = NfTokens.logoUrl;
+    final logoSize = fontSize * 0.95;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -22,19 +23,20 @@ class NfBrandHeader extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (logoUrl != null && logoUrl.isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    logoUrl,
-                    width: fontSize,
-                    height: fontSize,
-                    errorBuilder: (context, error, stackTrace) =>
-                        const SizedBox.shrink(),
-                  ),
-                ),
-                const SizedBox(width: 10),
-              ],
+              ClipRRect(
+                borderRadius: BorderRadius.circular(logoSize * 0.22),
+                child: logoUrl != null && logoUrl.isNotEmpty
+                    ? Image.network(
+                        logoUrl,
+                        width: logoSize,
+                        height: logoSize,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _NfLocalLogo(size: logoSize),
+                      )
+                    : _NfLocalLogo(size: logoSize),
+              ),
+              const SizedBox(width: 10),
               Text(
                 NfTokens.appName,
                 maxLines: 1,
@@ -56,6 +58,31 @@ class NfBrandHeader extends StatelessWidget {
           style: TextStyle(color: NfTokens.textMute, height: 1.4),
         ),
       ],
+    );
+  }
+}
+
+class _NfLocalLogo extends StatelessWidget {
+  const _NfLocalLogo({this.size = 36});
+
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.asset(
+      'assets/branding/logo-icon.png',
+      width: size,
+      height: size,
+      fit: BoxFit.contain,
+      filterQuality: FilterQuality.high,
+      errorBuilder: (context, error, stackTrace) {
+        return Image.asset(
+          'assets/branding/app-icon-512.png',
+          width: size,
+          height: size,
+          fit: BoxFit.cover,
+        );
+      },
     );
   }
 }
@@ -144,6 +171,44 @@ class NfSegmented extends StatelessWidget {
           backgroundColor: NfTokens.card2,
         );
       }).toList(),
+    );
+  }
+}
+
+/// État vide / hors ligne sans cache local (première sync manquante).
+class NfOfflineEmpty extends StatelessWidget {
+  const NfOfflineEmpty({
+    super.key,
+    required this.message,
+    this.icon = Icons.cloud_off_outlined,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  final String message;
+  final IconData icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.all(24),
+      children: [
+        const SizedBox(height: 48),
+        Icon(icon, size: 48, color: NfTokens.textMute),
+        const SizedBox(height: 16),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: NfTokens.textMute, height: 1.4),
+        ),
+        if (actionLabel != null && onAction != null) ...[
+          const SizedBox(height: 20),
+          NfPrimaryButton(label: actionLabel!, onPressed: onAction),
+        ],
+      ],
     );
   }
 }

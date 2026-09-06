@@ -12,10 +12,14 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-/// API_BASE via --dart-define=API_BASE=http://10.0.2.2:3001
+/// API_BASE via --dart-define=API_BASE=…
+///
+/// - release / APK collab → https://neoforma-api.onrender.com
+/// - debug sans define → Render (téléphone réel) ; émulateur local :
+///   --dart-define=API_BASE=http://10.0.2.2:3001
 String resolveApiBase() {
   const fromEnv = String.fromEnvironment('API_BASE');
   if (fromEnv.isNotEmpty) return fromEnv.replaceAll(RegExp(r'/$'), '');
-  // Émulateur Android → machine hôte
-  return 'http://10.0.2.2:3001';
+  // Téléphone réel + debug sans dart-define → API cloud (pas 10.0.2.2).
+  return 'https://neoforma-api.onrender.com';
 }

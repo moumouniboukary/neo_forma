@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/client.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../core/offline/local_cache.dart';
+import '../../core/riverpod_safe.dart';
 
 class NotificationItem {
   const NotificationItem({
@@ -53,38 +54,51 @@ final notificationsRevisionProvider = StateProvider<int>((ref) => 0);
 
 /// Liste des notifications — API en premier, cache local si hors ligne.
 final notificationsProvider =
-    FutureProvider.autoDispose<List<NotificationItem>>((ref) async {
-      ref.watch(notificationsRevisionProvider);
-      final api = ref.watch(apiClientProvider);
-      final cache = ref.watch(localCacheProvider);
-      try {
-        final res = await api.get<Map<String, dynamic>>(
-          '/notifications',
-          parse: (d) => Map<String, dynamic>.from(d as Map),
-        );
-        final items = ((res['items'] as List?) ?? [])
-            .map((e) => NotificationItem.fromMap(Map<String, dynamic>.from(e as Map)))
-            .toList();
-        await cache.putList(
-          LocalCacheKeys.notifications,
-          items.map((e) => e.toMap()).toList(),
-        );
-        return items;
-      } catch (_) {
-        return cache
-            .getList(LocalCacheKeys.notifications)
-            .map(NotificationItem.fromMap)
-            .toList();
-      }
-    });
+    FutureProvider.autoDispose<List<NotificationItem>>(
+  (ref) async {
+    ref.watch(notificationsRevisionProvider);
+    final api = ref.watch(apiClientProvider);
+    final cache = ref.watch(localCacheProvider);
+    try {
+      final res = await api.get<Map<String, dynamic>>(
+        '/notifications',
+        parse: (d) => Map<String, dynamic>.from(d as Map),
+      );
+      final items = ((res['items'] as List?) ?? [])
+          .map(
+            (e) =>
+                NotificationItem.fromMap(Map<String, dynamic>.from(e as Map)),
+          )
+          .toList();
+      await cache.putList(
+        LocalCacheKeys.notifications,
+        items.map((e) => e.toMap()).toList(),
+      );
+      return items;
+    } catch (_) {
+      return cache
+          .getList(LocalCacheKeys.notifications)
+          .map(NotificationItem.fromMap)
+          .toList();
+    }
+  },
+  dependencies: [
+    notificationsRevisionProvider,
+    apiClientProvider,
+    localCacheProvider,
+  ],
+);
 
-final unreadNotificationsCountProvider = Provider.autoDispose<int>((ref) {
-  final async = ref.watch(notificationsProvider);
-  return async.maybeWhen(
-    data: (items) => items.where((n) => !n.lu).length,
-    orElse: () => 0,
-  );
-});
+final unreadNotificationsCountProvider = Provider.autoDispose<int>(
+  (ref) {
+    final async = ref.watch(notificationsProvider);
+    return async.maybeWhen(
+      data: (items) => items.where((n) => !n.lu).length,
+      orElse: () => 0,
+    );
+  },
+  dependencies: [notificationsProvider],
+);
 
 class NotificationsRepository {
   NotificationsRepository(this._api);
@@ -96,6 +110,7 @@ class NotificationsRepository {
 
 final notificationsRepositoryProvider = Provider<NotificationsRepository>(
   (ref) => NotificationsRepository(ref.watch(apiClientProvider)),
+  dependencies: [apiClientProvider],
 );
 
 /// Types de notifications déclenchant une alerte système locale.
@@ -133,7 +148,9 @@ class NotificationsPoller {
           body: m['corps']?.toString() ?? '',
         );
       }
-      _ref.read(notificationsRevisionProvider.notifier).state++;
+      scheduleProviderWrite(() {
+        _ref.read(notificationsRevisionProvider.notifier).state++;
+      });
     } catch (_) {
       // silencieux — pas de réseau
     }
@@ -142,4 +159,5 @@ class NotificationsPoller {
 
 final notificationsPollerProvider = Provider<NotificationsPoller>(
   (ref) => NotificationsPoller(ref),
+  dependencies: [apiClientProvider, notificationsRevisionProvider],
 );

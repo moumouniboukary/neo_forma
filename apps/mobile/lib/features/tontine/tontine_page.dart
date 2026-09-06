@@ -5,8 +5,12 @@ import 'package:intl/intl.dart';
 
 import '../../core/api/client.dart';
 import '../../core/l10n/locale_provider.dart';
+import '../../core/offline/local_cache.dart';
+import '../../core/offline/queue.dart';
+import '../../core/riverpod_safe.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/nf_widgets.dart';
+import '../sync/sync_service.dart';
 import 'tontine_data.dart';
 
 class TontinePage extends ConsumerStatefulWidget {
@@ -77,9 +81,46 @@ class _TontinePageState extends ConsumerState<TontinePage> {
       await ref
           .read(tontineRepositoryProvider)
           .create(nom: nom, cotisationFcfa: amount, frequence: frequence);
-      ref.read(tontineRevisionProvider.notifier).state++;
+      bumpStateProvider(ref.read(tontineRevisionProvider.notifier));
     } on ApiException catch (e) {
-      if (mounted) {
+      if (e.isOffline || e.isServerError) {
+        final mutationId = OfflineQueue.newId();
+        final createdAt = DateTime.now().toUtc().toIso8601String();
+        await ref.read(offlineQueueProvider).enqueue(
+          QueuedMutation(
+            clientMutationId: mutationId,
+            kind: 'create_tontine',
+            payload: {
+              'nom': nom,
+              'cotisationFcfa': amount,
+              'frequence': frequence,
+              'membres': 1,
+            },
+            createdAt: createdAt,
+          ),
+        );
+        final cache = ref.read(localCacheProvider);
+        final existing = cache.getList(LocalCacheKeys.tontines);
+        await cache.putList(LocalCacheKeys.tontines, [
+          ...existing,
+          {
+            'id': mutationId,
+            'nom': nom,
+            'cotisationFcfa': amount,
+            'frequence': frequence,
+            'membres': 1,
+            'actif': true,
+            'cotisations': <Map<String, dynamic>>[],
+          },
+        ]);
+        await ref.read(syncServiceProvider).refreshCount();
+        bumpStateProvider(ref.read(tontineRevisionProvider.notifier));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(t('savedOffline'))),
+          );
+        }
+      } else if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.message)));
@@ -120,14 +161,52 @@ class _TontinePageState extends ConsumerState<TontinePage> {
       await ref
           .read(tontineRepositoryProvider)
           .addCotisation(tontine.id, amount);
-      ref.read(tontineRevisionProvider.notifier).state++;
+      bumpStateProvider(ref.read(tontineRevisionProvider.notifier));
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(t('cotisationSaved'))));
       }
     } on ApiException catch (e) {
-      if (mounted) {
+      if (e.isOffline || e.isServerError) {
+        final mutationId = OfflineQueue.newId();
+        final createdAt = DateTime.now().toUtc().toIso8601String();
+        await ref.read(offlineQueueProvider).enqueue(
+          QueuedMutation(
+            clientMutationId: mutationId,
+            kind: 'create_tontine_cotisation',
+            payload: {
+              'tontineId': tontine.id,
+              'montantFcfa': amount,
+            },
+            createdAt: createdAt,
+          ),
+        );
+        final cache = ref.read(localCacheProvider);
+        final items = cache.getList(LocalCacheKeys.tontines);
+        final updated = items.map((m) {
+          if (m['id']?.toString() != tontine.id) return m;
+          final cotisations = List<Map<String, dynamic>>.from(
+            ((m['cotisations'] as List?) ?? []).map(
+              (e) => Map<String, dynamic>.from(e as Map),
+            ),
+          );
+          cotisations.insert(0, {
+            'id': mutationId,
+            'montantFcfa': amount,
+            'datePaiement': createdAt,
+          });
+          return {...m, 'cotisations': cotisations};
+        }).toList();
+        await cache.putList(LocalCacheKeys.tontines, updated);
+        await ref.read(syncServiceProvider).refreshCount();
+        bumpStateProvider(ref.read(tontineRevisionProvider.notifier));
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(t('savedOffline'))),
+          );
+        }
+      } else if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text(e.message)));
@@ -140,6 +219,7 @@ class _TontinePageState extends ConsumerState<TontinePage> {
     final t = ref.watch(nfStringsProvider);
     final async = ref.watch(tontinesProvider);
     final fmt = NumberFormat.decimalPattern('fr');
+    final hasCache = ref.read(localCacheProvider).hasKey(LocalCacheKeys.tontines);
 
     return Scaffold(
       appBar: AppBar(
@@ -154,23 +234,20 @@ class _TontinePageState extends ConsumerState<TontinePage> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          ref.read(tontineRevisionProvider.notifier).state++;
+          bumpStateProvider(ref.read(tontineRevisionProvider.notifier));
           await ref.read(tontinesProvider.future);
         },
         child: async.when(
           loading: () => const Center(child: CircularProgressIndicator()),
-          error: (_, _) => ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Text(
-                t('offlineQueue'),
-                style: TextStyle(color: NfTokens.textMute),
-              ),
-            ],
+          error: (_, _) => NfOfflineEmpty(
+            message: t('offlineCanRecord'),
+            actionLabel: t('newTontine'),
+            onAction: _createTontine,
           ),
           data: (items) {
             if (items.isEmpty) {
               return ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.all(20),
                 children: [
                   const SizedBox(height: 40),
@@ -181,9 +258,14 @@ class _TontinePageState extends ConsumerState<TontinePage> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    t('noTontine'),
+                    hasCache ? t('noTontine') : t('offlineCanRecord'),
                     textAlign: TextAlign.center,
                     style: TextStyle(color: NfTokens.textMute),
+                  ),
+                  const SizedBox(height: 16),
+                  NfPrimaryButton(
+                    label: t('newTontine'),
+                    onPressed: _createTontine,
                   ),
                 ],
               );

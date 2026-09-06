@@ -13,6 +13,8 @@ import 'features/ledger/products_page.dart';
 import 'features/notifications/notifications_page.dart';
 import 'features/onboarding/onboarding_page.dart';
 import 'features/score_credit_profile.dart';
+import 'features/settings/about_page.dart';
+import 'features/settings/settings_page.dart';
 import 'features/stock/stock_page.dart';
 import 'features/tontine/tontine_page.dart';
 
@@ -129,6 +131,16 @@ GoRouter createRouter(Ref ref) {
         path: '/app/notifications',
         parentNavigatorKey: _rootKey,
         builder: (context, state) => const NotificationsPage(),
+      ),
+      GoRoute(
+        path: '/app/parametres',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const SettingsPage(),
+      ),
+      GoRoute(
+        path: '/app/aide',
+        parentNavigatorKey: _rootKey,
+        builder: (context, state) => const AboutHelpPage(),
       ),
     ],
   );

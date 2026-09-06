@@ -2,8 +2,23 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/api/client.dart';
 import '../../core/storage/session.dart';
+import '../../core/utils/parse.dart';
 
 enum OtpPurpose { login, register, reset }
+
+/// Normalise un numéro Burkina vers `+226XXXXXXXX` (8 chiffres locaux).
+String normalizeBfPhone(String raw) {
+  final digits = raw.replaceAll(RegExp(r'\D'), '');
+  if (digits.startsWith('226') && digits.length >= 11) {
+    return '+226${digits.substring(3, 11)}';
+  }
+  if (digits.length >= 8) {
+    final local =
+        digits.length == 8 ? digits : digits.substring(digits.length - 8);
+    return '+226$local';
+  }
+  return raw.trim();
+}
 
 class AuthState {
   const AuthState({this.user, this.token, this.ready = false});
@@ -32,7 +47,8 @@ class AuthState {
 
 class AuthNotifier extends StateNotifier<AuthState> {
   AuthNotifier(this._api, this._session) : super(const AuthState()) {
-    _bootstrap();
+    // Différé : évite de muter auth pendant le 1er build qui watch le provider.
+    Future.microtask(_bootstrap);
   }
 
   final ApiClient _api;
@@ -50,11 +66,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   ) async {
     final data = await _api.post<Map<String, dynamic>>(
       '/auth/otp/request',
-      data: {'phone': phone, 'purpose': purpose.name},
+      data: {'phone': normalizeBfPhone(phone), 'purpose': purpose.name},
       parse: (d) => Map<String, dynamic>.from(d as Map),
     );
     return (
-      expiresIn: data['expiresIn'] as int? ?? 300,
+      expiresIn: asFcfaInt(data['expiresIn'], fallback: 300),
       devCode: data['devCode'] as String?,
     );
   }
@@ -66,7 +82,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   ) async {
     final data = await _api.post<Map<String, dynamic>>(
       '/auth/otp/verify',
-      data: {'phone': phone, 'code': code, 'purpose': purpose.name},
+      data: {
+        'phone': normalizeBfPhone(phone),
+        'code': code,
+        'purpose': purpose.name,
+      },
       parse: (d) => Map<String, dynamic>.from(d as Map),
     );
     return data['otpToken'] as String;
@@ -79,7 +99,11 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }) async {
     final data = await _api.post<Map<String, dynamic>>(
       '/auth/login',
-      data: {'phone': phone, 'pin': pin, 'otpToken': otpToken},
+      data: {
+        'phone': normalizeBfPhone(phone),
+        'pin': pin,
+        'otpToken': otpToken,
+      },
       parse: (d) => Map<String, dynamic>.from(d as Map),
     );
     final user = StoredUser.fromJson(data['user'] as Map<String, dynamic>);
@@ -96,6 +120,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     return user;
   }
 
+  /// Reprise de session déjà stockée (sans OTP) — utile hors ligne.
+  Future<bool> resumeLocalSession() async {
+    final token = await _session.getAccessToken();
+    final user = await _session.getUser();
+    if (token == null || user == null) return false;
+    state = AuthState(token: token, user: user, ready: true);
+    return true;
+  }
+
   Future<void> register({
     required String phone,
     required String pin,
@@ -106,7 +139,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     final data = await _api.post<Map<String, dynamic>>(
       '/auth/register',
       data: {
-        'phone': phone,
+        'phone': normalizeBfPhone(phone),
         'pin': pin,
         'otpToken': otpToken,
         'displayName': displayName,
@@ -128,13 +161,19 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 
   Future<void> refreshMe() async {
-    final data = await _api.get<Map<String, dynamic>>(
-      '/me',
-      parse: (d) => Map<String, dynamic>.from(d as Map),
-    );
-    final user = StoredUser.fromJson(data);
-    await _session.setUser(user);
-    state = state.copyWith(user: user);
+    try {
+      final data = await _api.get<Map<String, dynamic>>(
+        '/me',
+        parse: (d) => Map<String, dynamic>.from(d as Map),
+      );
+      final user = StoredUser.fromJson(data);
+      await _session.setUser(user);
+      state = state.copyWith(user: user);
+    } on ApiException catch (e) {
+      // Session locale conservée hors ligne.
+      if (e.isOffline || e.isServerError) return;
+      rethrow;
+    }
   }
 
   void setUser(StoredUser user) {
@@ -152,9 +191,12 @@ class AuthNotifier extends StateNotifier<AuthState> {
   }
 }
 
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
-  return AuthNotifier(
-    ref.watch(apiClientProvider),
-    ref.watch(sessionStorageProvider),
-  );
-});
+final authProvider = StateNotifierProvider<AuthNotifier, AuthState>(
+  (ref) {
+    return AuthNotifier(
+      ref.watch(apiClientProvider),
+      ref.watch(sessionStorageProvider),
+    );
+  },
+  dependencies: [apiClientProvider, sessionStorageProvider],
+);

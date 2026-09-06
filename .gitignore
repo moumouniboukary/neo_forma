@@ -49,7 +49,15 @@ tools/tts-venv/
 
 # Local Gradle / Flutter build helpers
 .gradle-home/
+.gradle-home-fresh/
 
 # Generated
 *.log
 .turbo/
+
+# Independent local clone
+teriyascore/
+
+# Local APKs / Word lockfiles
+*.apk
+~$*

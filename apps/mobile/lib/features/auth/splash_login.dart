@@ -1,11 +1,19 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/api/client.dart';
+import '../../core/brand.dart';
+import '../../core/l10n/locale_provider.dart';
 import '../../core/theme/tokens.dart';
+import '../../core/voice/voice_service.dart';
+import '../../core/widgets/nf_numeric_keypad.dart';
 import '../../core/widgets/nf_widgets.dart';
+import '../sync/sync_service.dart';
 import 'app_lock.dart';
 import 'auth_provider.dart';
 
@@ -17,7 +25,35 @@ class SplashPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final auth = ref.watch(authProvider);
     if (!auth.ready) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Image(
+                image: AssetImage('assets/branding/logo-icon.png'),
+                width: 88,
+                height: 88,
+                fit: BoxFit.contain,
+                gaplessPlayback: true,
+              ),
+              const SizedBox(height: 18),
+              Text(
+                kAppName,
+                style: const TextStyle(
+                  fontSize: 36,
+                  fontWeight: FontWeight.w800,
+                  color: NfTokens.brand,
+                  letterSpacing: -0.6,
+                  height: 1,
+                  fontFamily: 'sans-serif',
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
     }
 
     final gradientColors = <Color>[NfTokens.bgMid, NfTokens.bg, NfTokens.card2];
@@ -37,52 +73,12 @@ class SplashPage extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const NfBrandHeader(
-                  tagline:
-                      'Cahier numérique & passeport financier pour le secteur informel.',
-                ),
-                const SizedBox(height: 36),
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Votre activité,\nvisible.',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              height: 1.15,
-                            ),
-                      ),
-                      const SizedBox(height: 12),
-                      Text(
-                        'Enregistrez ventes et créances, construisez votre NeoScore, accédez au microcrédit.',
-                        style: TextStyle(
-                          color: NfTokens.textMute,
-                          height: 1.45,
-                          fontSize: 15,
-                        ),
-                      ),
-                      const SizedBox(height: 28),
-                      const _HomeFeature(
-                        icon: Icons.menu_book_outlined,
-                        title: 'Cahier numérique',
-                        subtitle: 'Ventes, stock, créances — même hors ligne',
-                      ),
-                      const SizedBox(height: 14),
-                      const _HomeFeature(
-                        icon: Icons.insights_outlined,
-                        title: 'NeoScore',
-                        subtitle: 'Solvabilité basée sur votre activité réelle',
-                      ),
-                      const SizedBox(height: 14),
-                      const _HomeFeature(
-                        icon: Icons.account_balance_outlined,
-                        title: 'Crédit adapté',
-                        subtitle:
-                            'Offres liées à votre score et vos consentements',
-                      ),
-                    ],
+                  child: Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: const _FeatureShowcase(),
+                    ),
                   ),
                 ),
                 NfPrimaryButton(
@@ -111,6 +107,46 @@ class SplashPage extends ConsumerWidget {
   }
 }
 
+class _FeatureShowcase extends StatelessWidget {
+  const _FeatureShowcase();
+
+  static const _items = <(IconData, String, String)>[
+    (
+      Icons.menu_book_rounded,
+      'Cahier numérique',
+      'Ventes, stock, créances — même hors ligne',
+    ),
+    (
+      Icons.auto_graph_rounded,
+      'NeoScore',
+      'Solvabilité basée sur votre activité réelle',
+    ),
+    (
+      Icons.account_balance_rounded,
+      'Crédit adapté',
+      'Offres liées à votre score et vos consentements',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (var i = 0; i < _items.length; i++) ...[
+          if (i > 0) const SizedBox(height: 12),
+          _HomeFeature(
+            icon: _items[i].$1,
+            title: _items[i].$2,
+            subtitle: _items[i].$3,
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 class _HomeFeature extends StatelessWidget {
   const _HomeFeature({
     required this.icon,
@@ -124,38 +160,66 @@ class _HomeFeature extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: 40,
-          height: 40,
-          decoration: BoxDecoration(
-            color: NfTokens.elevated,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: NfTokens.line),
-          ),
-          child: Icon(icon, color: NfTokens.brandSoft, size: 20),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 2),
-              Text(
-                subtitle,
-                style: TextStyle(
-                  color: NfTokens.textMute,
-                  fontSize: 13,
-                  height: 1.35,
-                ),
+    final isDark = NfTokens.isDark;
+    final wash = NfTokens.brand.withValues(alpha: isDark ? 0.14 : 0.10);
+    final edge = NfTokens.brand.withValues(alpha: isDark ? 0.28 : 0.18);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: wash,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: edge, width: 1),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [
+                  NfTokens.brand.withValues(alpha: isDark ? 0.35 : 0.22),
+                  NfTokens.brandSoft.withValues(alpha: isDark ? 0.18 : 0.12),
+                ],
               ),
-            ],
+            ),
+            child: Icon(icon, color: NfTokens.brandSoft, size: 24),
           ),
-        ),
-      ],
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: GoogleFonts.syne(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: NfTokens.text,
+                    height: 1.15,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: TextStyle(
+                    color: NfTokens.textMute,
+                    fontSize: 13.5,
+                    height: 1.4,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -172,10 +236,61 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final phoneCtrl = TextEditingController(text: '+226 ');
   final otpCtrl = TextEditingController();
   final pinCtrl = TextEditingController();
+  String phoneDigits = '';
   String? otpToken;
   String? devCode;
   String? error;
   bool loading = false;
+  bool hasLocalSession = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkLocalSession();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (ref.read(uxPrefsProvider).voiceAssist) {
+        ref.read(voiceServiceProvider).speakKey('phoneEnter');
+      }
+    });
+  }
+
+  void _setPhoneDigits(String d) {
+    setState(() {
+      phoneDigits = d;
+      phoneCtrl.text = NfPhoneEntry.toE164(d);
+      error = null;
+    });
+  }
+
+  Future<void> _checkLocalSession() async {
+    final session = ref.read(sessionStorageProvider);
+    final token = await session.getAccessToken();
+    final user = await session.getUser();
+    if (!mounted) return;
+    setState(() => hasLocalSession = token != null && user != null);
+  }
+
+  Future<void> _continueOffline() async {
+    setState(() {
+      loading = true;
+      error = null;
+    });
+    try {
+      final ok = await ref.read(authProvider.notifier).resumeLocalSession();
+      if (!ok) {
+        setState(() {
+          hasLocalSession = false;
+          error = ref.read(nfStringsProvider)('loginNeedsNetwork');
+        });
+        return;
+      }
+      if (!mounted) return;
+      context.go('/app');
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
 
   @override
   void dispose() {
@@ -199,8 +314,23 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         devCode = res.devCode;
         step = 1;
       });
+      if (res.devCode != null) {
+        // Collab / mode test : code affiché grand + lu à voix haute.
+        otpCtrl.text = res.devCode!;
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          final voice = ref.read(voiceServiceProvider);
+          await voice.speakKey('otpAgentHint');
+          await voice.speakText(
+            res.devCode!.split('').join(' '),
+          );
+        });
+      }
     } on ApiException catch (e) {
-      setState(() => error = e.message);
+      setState(() => error = e.isOffline
+          ? (e.message.isNotEmpty && e.message != 'Hors ligne'
+              ? e.message
+              : ref.read(nfStringsProvider)('loginNeedsNetwork'))
+          : e.message);
     } finally {
       setState(() => loading = false);
     }
@@ -224,7 +354,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         step = 2;
       });
     } on ApiException catch (e) {
-      setState(() => error = e.message);
+      setState(() => error = e.isOffline
+          ? (e.message.isNotEmpty && e.message != 'Hors ligne'
+              ? e.message
+              : ref.read(nfStringsProvider)('loginNeedsNetwork'))
+          : e.message);
     } finally {
       setState(() => loading = false);
     }
@@ -245,10 +379,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
             otpToken: otpToken!,
           );
       await ref.read(appLockProvider.notifier).setupPin(pinCtrl.text.trim());
+      final lock = ref.read(appLockProvider);
+      if (lock.biometricAvailable) {
+        await ref.read(appLockProvider.notifier).setBiometricEnabled(true);
+      }
+      // Précharge le cache pour un usage hors ligne immédiat.
+      unawaited(ref.read(syncServiceProvider).warmCaches());
       if (!mounted) return;
       context.go('/app');
     } on ApiException catch (e) {
-      setState(() => error = e.message);
+      setState(() => error = e.isOffline
+          ? (e.message.isNotEmpty && e.message != 'Hors ligne'
+              ? e.message
+              : ref.read(nfStringsProvider)('loginNeedsNetwork'))
+          : e.message);
     } finally {
       setState(() => loading = false);
     }
@@ -282,16 +426,31 @@ class _LoginPageState extends ConsumerState<LoginPage> {
           child: ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              const NfBrandHeader(
-                tagline:
-                    'Votre activité, visible. Votre solvabilité, accessible.',
-              ),
-              const SizedBox(height: 28),
               if (step == 0) ...[
-                TextField(
-                  controller: phoneCtrl,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(labelText: 'Téléphone'),
+                Text(
+                  ref.watch(nfStringsProvider)('phoneEnter'),
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        ref.watch(nfStringsProvider)('phone'),
+                        style: TextStyle(color: NfTokens.textMute),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () =>
+                          ref.read(voiceServiceProvider).speakKey('phoneEnter'),
+                      icon: const Icon(Icons.volume_up_outlined),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                NfPhoneEntry(
+                  digits: phoneDigits,
+                  onChanged: _setPhoneDigits,
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),
@@ -299,46 +458,89 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 ],
                 const SizedBox(height: 16),
                 NfPrimaryButton(
-                  label: loading ? 'Envoi…' : 'Recevoir le code',
+                  label: loading
+                      ? '…'
+                      : ref.watch(nfStringsProvider)('receiveCode'),
                   loading: loading,
-                  onPressed: _sendOtp,
+                  onPressed: phoneDigits.length == 8 ? _sendOtp : null,
                 ),
+                if (hasLocalSession) ...[
+                  const SizedBox(height: 10),
+                  OutlinedButton(
+                    onPressed: loading ? null : _continueOffline,
+                    child: Text(ref.watch(nfStringsProvider)('continueOffline')),
+                  ),
+                ],
               ] else if (step == 1) ...[
                 Text(
-                  'Code SMS',
+                  ref.watch(nfStringsProvider)('smsCode'),
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: otpCtrl,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(labelText: 'Code SMS'),
+                const SizedBox(height: 8),
+                Text(
+                  ref.watch(nfStringsProvider)('otpAgentHint'),
+                  style: TextStyle(color: NfTokens.textMute, fontSize: 13),
                 ),
-                if (devCode != null)
+                if (devCode != null) ...[
+                  const SizedBox(height: 12),
                   Container(
-                    margin: const EdgeInsets.only(top: 8),
+                    width: double.infinity,
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
+                      horizontal: 16,
+                      vertical: 18,
                     ),
                     decoration: BoxDecoration(
                       color: NfTokens.card2,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: NfTokens.line),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: NfTokens.sand, width: 2),
                     ),
-                    child: Text(
-                      'Mode test · votre code est $devCode',
-                      style: const TextStyle(color: NfTokens.sand),
+                    child: Column(
+                      children: [
+                        Text(
+                          ref.watch(nfStringsProvider)('otpAgentHint'),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: NfTokens.sand,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          devCode!,
+                          style: const TextStyle(
+                            fontSize: 42,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 12,
+                            color: NfTokens.brandSoft,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () {
+                            ref.read(voiceServiceProvider).speakText(
+                                  devCode!.split('').join(' '),
+                                );
+                          },
+                          icon: const Icon(Icons.volume_up_outlined),
+                          label: Text(ref.watch(nfStringsProvider)('otpListen')),
+                        ),
+                      ],
                     ),
                   ),
+                ],
+                const SizedBox(height: 16),
+                NfPinEntry(
+                  value: otpCtrl.text,
+                  onChanged: (v) => setState(() {
+                    otpCtrl.text = v;
+                    error = null;
+                  }),
+                ),
                 if (error != null)
                   Text(error!, style: const TextStyle(color: NfTokens.danger)),
                 const SizedBox(height: 16),
                 NfPrimaryButton(
-                  label: 'Continuer',
+                  label: ref.watch(nfStringsProvider)('continue'),
                   loading: loading,
                   onPressed: otpCtrl.text.length == 4 ? _verifyOtp : null,
                 ),
@@ -357,29 +559,36 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                             setState(() {
                               devCode = res.devCode;
                               otpCtrl.clear();
+                              if (res.devCode != null) {
+                                otpCtrl.text = res.devCode!;
+                              }
                             });
+                            if (res.devCode != null) {
+                              await ref.read(voiceServiceProvider).speakText(
+                                    res.devCode!.split('').join(' '),
+                                  );
+                            }
                           } on ApiException catch (e) {
                             setState(() => error = e.message);
                           } finally {
                             setState(() => loading = false);
                           }
                         },
-                  child: const Text('Renvoyer le code'),
+                  child: Text(ref.watch(nfStringsProvider)('receiveCode')),
                 ),
               ] else ...[
                 Text(
-                  'Votre code PIN',
+                  ref.watch(nfStringsProvider)('pinBigHint'),
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 16),
-                TextField(
-                  controller: pinCtrl,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  maxLength: 4,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(labelText: 'Code PIN'),
+                NfPinEntry(
+                  value: pinCtrl.text,
+                  obscure: true,
+                  onChanged: (v) => setState(() {
+                    pinCtrl.text = v;
+                    error = null;
+                  }),
                 ),
                 if (error != null)
                   Text(error!, style: const TextStyle(color: NfTokens.danger)),
